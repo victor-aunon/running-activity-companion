@@ -45,6 +45,13 @@
         },
         "elevationM": {
           "type": "number"
+        },
+        "gpsQuality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "default": 4,
+          "description": "Garmin Position.Quality indicator: 0 = NOT_AVAILABLE, 1 = LAST_KNOWN, 2 = POOR, 3 = USABLE, 4 = GOOD"
         }
       }
     },

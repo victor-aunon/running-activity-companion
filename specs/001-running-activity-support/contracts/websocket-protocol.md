@@ -41,7 +41,8 @@ Dispatched once per second by Android.
   "coordinates": {
     "lat": 40.416775,
     "lng": -3.703790,
-    "elevationM": 654.2
+    "elevationM": 654.2,
+    "gpsQuality": 4
   },
   "metrics": {
     "heartRateBpm": 158,
@@ -58,6 +59,7 @@ Dispatched once per second by Android.
   }
 }
 ```
+*Note*: When Garmin satellite signal is lost, `coordinates` contains last known position with `gpsQuality: 0`.
 
 ### `SESSION_STATE_CHANGED`
 Dispatched when runner presses Start, Pause, Resume, or Stop in the native Garmin Running activity:
@@ -69,6 +71,7 @@ Dispatched when runner presses Start, Pause, Resume, or Stop in the native Garmi
   "timestamp": 1792577000000
 }
 ```
+*Note*: When `status` transitions to `COMPLETED`, all queued in-flight cheers automatically transition to `EXPIRADO` with `runnerReplyText: "Actividad finalizada"`.
 
 ### `CHEER_STATUS_UPDATE`
 Dispatched when notification delivery state progresses or runner responds:
@@ -104,11 +107,13 @@ Dispatched by authorized spectator on the Web App:
 
 - Server responds to Web sender immediately:
   - If PIN invalid: `{"type": "ERROR", "code": "UNAUTHORIZED_PIN", "message": "PIN de espectador inválido"}`
+  - If rate limited (5 consecutive failures): `{"type": "ERROR", "code": "PIN_RATE_LIMITED", "message": "Demasiados intentos fallidos. Inténtalo de nuevo en 60 segundos."}`
   - If valid: Confirms status `ENVIADO` to sender, forwards frame to Android Gateway, and broadcasts `ENVIADO` to session viewers.
 
 ---
 
-## 4. Heartbeats & Ping/Pong
+## 4. Heartbeats, Dead Connection Cleanup & Reconnection
 - Client sends a `PING` frame every 15 seconds: `{"type": "PING"}`.
 - Server responds with: `{"type": "PONG", "timestamp": 1792577035000}`.
 - If no pong is received within 5 seconds, client executes exponential backoff reconnection.
+- Server terminates and cleans up zombie client connections if 3 consecutive pings (45 seconds) elapse without activity.

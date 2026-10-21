@@ -45,8 +45,14 @@ PORT=3000
 ```
 
 **Storage**:
-- Android: Local-first persistence in Room Database (`workout_sessions`, `telemetry_buffer`, `cheer_history`).
+- Android: Local-first persistence in Room Database (`workout_sessions`, `telemetry_buffer`, `cheer_history`). Telemetry buffer capped at 50,000 points (~13.8 hours at 1 Hz, max 50 MB) with FIFO eviction during severe outages, plus automatic retention pruning to keep only the last 5 completed workout sessions.
 - Web: Ephemeral in-memory browser session state (Zustand / React Context); zero cloud database persistence for v1.
+
+**Resilience & Protocol Specifications**:
+- **Garmin BLE Budget & Dormancy**: `Toybox.Communications.transmit()` payloads are serialized into compact numeric dictionaries constrained to a 256-byte MTU limit. In disabled pre-activity state, the Data Field enforces total radio silence (0 BLE packets, 0 wakelocks). During mid-run BLE disconnects, a 10-packet ring buffer protects Connect IQ heap limits while retrying every 5 seconds.
+- **Effort Zone Monotonic Fallback**: If `NEXT_PUBLIC_ZONE_*_MAX` variables are missing, non-numeric, or non-monotonic, the system automatically falls back to default thresholds [130, 145, 160, 175, 195].
+- **Security & PIN Rate Limiting**: 5 consecutive failed PIN attempts lock submissions for 60 seconds.
+- **Cheer Completion Lifecycle**: Any unreached in-flight cheer transitions to `EXPIRADO` ("Actividad finalizada") upon workout completion.
 
 **Target Platform**:
 - Web: Fully responsive across evergreen mobile (375px+), tablet (768px+), and desktop (1280px+) browsers in Light Mode.

@@ -36,6 +36,7 @@ Discrete real-time telemetry frame captured at 1 Hz from Garmin sensors during n
 | `latitude` | `Double` | deg | GPS WGS84 Latitude | -90.0 to 90.0 |
 | `longitude` | `Double` | deg | GPS WGS84 Longitude | -180.0 to 180.0 |
 | `elevation` | `Float` | m | GPS / barometric altitude | -500 to 9000 m |
+| `gpsQuality` | `Int` | - | Garmin Position.Quality | 0 to 4 (0 = NOT_AVAILABLE, 4 = GOOD) |
 | `speedMps` | `Float` | m/s | Instantaneous speed | >= 0.0 m/s |
 | `paceSecPerKm` | `Double` | s/km | Derived running pace | Calculated from speed |
 | `heartRate` | `Int` | bpm | Heart rate from optical/chest sensor | 30 to 240 bpm |
@@ -124,17 +125,35 @@ CREATE TABLE cheer_history (
 );
 ```
 
+*Buffer Capacity & Retention Policy*:
+- Max unsynced records: 50,000 (~13.8 hours of 1 Hz streaming, ~50 MB ceiling). If exceeded during catastrophic cellular outages, older unsynced records are dropped (FIFO).
+- Historical retention: Android companion retains the last 5 completed sessions; older workout sessions and cascaded telemetry buffers are automatically purged.
+
 ---
 
 ## 3. Web Dashboard (Next.js) Ephemeral State & Effort Zone Resolution
 
 ```typescript
 export interface EffortZoneConfig {
-  zone1Max: number; // e.g. from NEXT_PUBLIC_ZONE_1_MAX || 130
-  zone2Max: number; // e.g. from NEXT_PUBLIC_ZONE_2_MAX || 145
-  zone3Max: number; // e.g. from NEXT_PUBLIC_ZONE_3_MAX || 160
-  zone4Max: number; // e.g. from NEXT_PUBLIC_ZONE_4_MAX || 175
-  zone5Max: number; // e.g. from NEXT_PUBLIC_ZONE_5_MAX || 195
+  zone1Max: number;
+  zone2Max: number;
+  zone3Max: number;
+  zone4Max: number;
+  zone5Max: number;
+}
+
+export function parseEffortZones(env: Record<string, string | undefined>): EffortZoneConfig {
+  const z1 = Number(env.NEXT_PUBLIC_ZONE_1_MAX) || 130;
+  const z2 = Number(env.NEXT_PUBLIC_ZONE_2_MAX) || 145;
+  const z3 = Number(env.NEXT_PUBLIC_ZONE_3_MAX) || 160;
+  const z4 = Number(env.NEXT_PUBLIC_ZONE_4_MAX) || 175;
+  const z5 = Number(env.NEXT_PUBLIC_ZONE_5_MAX) || 195;
+
+  // Validate strict monotonic progression; fall back to defaults if invalid
+  if (z1 >= z2 || z2 >= z3 || z3 >= z4 || z4 >= z5 || z1 < 60 || z5 > 230) {
+    return { zone1Max: 130, zone2Max: 145, zone3Max: 160, zone4Max: 175, zone5Max: 195 };
+  }
+  return { zone1Max: z1, zone2Max: z2, zone3Max: z3, zone4Max: z4, zone5Max: z5 };
 }
 
 export function resolveHeartRateZone(hr: number, config: EffortZoneConfig): {
