@@ -101,10 +101,12 @@ CREATE TABLE telemetry_buffer (
     latitude REAL NOT NULL,
     longitude REAL NOT NULL,
     elevation REAL NOT NULL,
+    gps_quality INTEGER NOT NULL DEFAULT 4,
     speed_mps REAL NOT NULL,
+    pace_sec_per_km REAL NOT NULL,
     heart_rate INTEGER NOT NULL,
     cadence INTEGER NOT NULL,
-    step_count INTEGER NOT NULL,
+    step_count INTEGER NOT NULL DEFAULT 0,
     synced INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(session_id) REFERENCES workout_sessions(session_id) ON DELETE CASCADE
 );

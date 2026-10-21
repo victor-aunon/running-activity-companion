@@ -84,6 +84,11 @@
           "minimum": 0,
           "maximum": 300
         },
+        "stepCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative workout step count"
+        },
         "totalDistanceM": {
           "type": "number",
           "minimum": 0.0

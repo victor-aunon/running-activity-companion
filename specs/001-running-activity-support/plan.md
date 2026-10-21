@@ -31,6 +31,7 @@ The system is a distributed 3-tier real-time running ecosystem:
 ```env
 # Athlete & Spectator Configuration
 NEXT_PUBLIC_ATHLETE_NAME=Víctor
+NEXT_PUBLIC_DEFAULT_LOCALITY="Madrid (Casa de Campo)"
 
 # Dynamic Heart Rate Effort Zones (BPM)
 NEXT_PUBLIC_ZONE_1_MAX=130
@@ -137,7 +138,7 @@ running-activity-support/
 │       ├── source/
 │       │   ├── RunningSupportDataField.mc # Hooks into native Garmin Running activity
 │       │   ├── NotificationBannerOverlay.mc # Non-obstructive top banner overlay
-│       │   ├── DataFieldMenuDelegate.mc   # Pre-activity toggle (Enabled / Disabled)
+│       │   ├── DataFieldMenuDelegate.mc   # Physical button interaction & runner cheer reply
 │       │   └── BleTransmitter.mc          # Connect IQ Communications wrapper
 │       ├── resources/
 │       │   └── settings/
