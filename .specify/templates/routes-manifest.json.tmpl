@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Mapping of Google Stitch screens and UI components to local Playwright routes",
+  "screens": [
+    {
+      "id": "screen-main-dashboard",
+      "name": "Main Dashboard",
+      "route": "/",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "waitForSelector": "main",
+      "maskSelectors": [
+        "[data-testid='current-timestamp']",
+        "[data-testid='user-avatar']"
+      ]
+    }
+  ]
+}

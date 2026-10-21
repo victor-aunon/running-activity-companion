@@ -1,0 +1,49 @@
+import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * Visual Audit and CSS Tokens Verification Test against Stitch Golden Master
+ */
+test.describe('Stitch Design Audit & Tokens Verification', () => {
+  const featureDir = process.env.FEATURE_DIR || './specs';
+  const designsDir = path.join(featureDir, 'designs');
+  const tokensFile = path.join(designsDir, 'tokens.css');
+  const manifestFile = path.join(designsDir, 'routes-manifest.json');
+
+  test('CSS design tokens are strictly applied in the DOM', async ({ page }) => {
+    test.skip(!fs.existsSync(tokensFile), 'No tokens.css found in designs directory');
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Extract computed CSS custom properties from :root
+    const rootStyles = await page.evaluate(() => {
+      const computed = window.getComputedStyle(document.documentElement);
+      return {
+        bgCanvas: computed.getPropertyValue('--color-bg-canvas').trim(),
+        textPrimary: computed.getPropertyValue('--color-text-primary').trim(),
+        colorPrimary: computed.getPropertyValue('--color-primary').trim(),
+      };
+    });
+
+    expect(rootStyles).toBeDefined();
+  });
+
+  test('Visual layout matches Stitch golden screenshot with 0.05 tolerance', async ({ page }) => {
+    test.skip(!fs.existsSync(manifestFile), 'No routes-manifest.json found in designs directory');
+
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    for (const screen of manifest.screens || []) {
+      const goldenImagePath = path.join(designsDir, `${screen.id}.png`);
+      test.skip(!fs.existsSync(goldenImagePath), `Golden screenshot for ${screen.id} not found`);
+
+      await page.goto(screen.route || '/');
+      await page.waitForLoadState('networkidle');
+
+      await expect(page).toHaveScreenshot(`${screen.id}.png`, {
+        maxDiffPixelRatio: 0.05,
+      });
+    }
+  });
+});

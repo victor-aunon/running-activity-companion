@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Mapping of Stitch screens and UI components for Real-Time Running Activity Support",
+  "stitchProjectId": "7796552521872573102",
+  "screens": [
+    {
+      "id": "screen-live-dashboard",
+      "name": "Live Runner Dashboard (Aurora & Bento Box)",
+      "route": "/session/live-demo",
+      "stitchScreenId": "09e8fff8d2b947989357ff1600a23046",
+      "screenshot": "screen-live-dashboard.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "waitForSelector": "main",
+      "maskSelectors": [
+        "[data-testid='current-timestamp']"
+      ]
+    },
+    {
+      "id": "screen-live-dashboard-mobile",
+      "name": "Live Runner Dashboard (Mobile Viewport)",
+      "route": "/session/live-demo",
+      "stitchScreenId": "09e8fff8d2b947989357ff1600a23046",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "waitForSelector": "main"
+    },
+    {
+      "id": "screen-android-gateway",
+      "name": "Android 16 Companion Gateway Console",
+      "route": "/gateway",
+      "viewport": {
+        "width": 412,
+        "height": 915
+      },
+      "waitForSelector": "main"
+    },
+    {
+      "id": "screen-garmin-overlay",
+      "name": "Garmin Fenix 7s Top Banner Overlay in Native Run",
+      "route": "/watch-overlay",
+      "viewport": {
+        "width": 260,
+        "height": 260
+      },
+      "waitForSelector": "main"
+    }
+  ]
+}

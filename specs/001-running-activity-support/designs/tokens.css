@@ -1,0 +1,43 @@
+:root {
+  /* Canvas & Surface Colors (Pure Light Mode) */
+  --color-bg-canvas: #f8fafc;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-subtle: #f1f5f9;
+  --color-bg-surface-frosted: rgba(255, 255, 255, 0.82);
+
+  /* Aurora Racing Glow Accents (Warm Aggressive Competition) */
+  --aurora-glow-orange: rgba(249, 115, 22, 0.14);
+  --aurora-glow-amber: rgba(245, 158, 11, 0.10);
+  --aurora-glow-rose: rgba(244, 63, 94, 0.08);
+
+  /* Typography Colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Brand & Status Colors (Racing Orange Primary) */
+  --color-primary: #f97316;
+  --color-border-subtle: rgba(226, 232, 240, 0.8);
+  --color-border-focus: #f97316;
+
+  --status-sent: #0284c7;
+  --status-delivered: #10b981;
+  --status-thanked: #8b5cf6;
+  --status-expired: #64748b;
+
+  /* Effort Zones (Dynamic fallbacks from .env.local) */
+  --zone-1-color: #0284c7;
+  --zone-2-color: #16a34a;
+  --zone-3-color: #d97706;
+  --zone-4-color: #ea580c;
+  --zone-5-color: #dc2626;
+
+  /* Bento Layout Tokens (Subtle modern radius) */
+  --bento-card-radius: 10px;
+  --bento-card-shadow: 0 4px 20px -1px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  --bento-gap: 1.25rem;
+
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}

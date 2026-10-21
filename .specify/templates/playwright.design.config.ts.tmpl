@@ -1,0 +1,35 @@
+import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * Playwright Configuration for Stitch Visual Design Audit
+ * Runs webServer against Vite+ (vp dev) and compares against frozen golden screenshots
+ */
+export default defineConfig({
+  testDir: './tests/design',
+  snapshotPathTemplate: '{testDir}/__snapshots__/{testFilePath}/{arg}{ext}',
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.05, // Calibrated tolerance for OS font rendering differences
+      animations: 'disabled',
+    },
+  },
+  use: {
+    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:5173',
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'design-audit-desktop',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+  ],
+  webServer: {
+    command: process.env.PLAYWRIGHT_DEV_COMMAND || 'vp dev || npm run dev',
+    url: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 30000,
+  },
+});

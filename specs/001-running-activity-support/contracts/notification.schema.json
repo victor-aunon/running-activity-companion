@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://running-support.local/schemas/notification.schema.json",
+  "title": "SpectatorCheerPayloads",
+  "description": "Schemas for spectator cheer dispatch, delivery events, and runner gratitude replies",
+  "oneOf": [
+    {
+      "title": "DispatchCheerCommand",
+      "type": "object",
+      "required": [
+        "type",
+        "notificationId",
+        "sessionId",
+        "spectatorPin",
+        "senderName",
+        "presetId",
+        "body",
+        "ttlSeconds"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "DISPATCH_CHEER"
+        },
+        "notificationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "spectatorPin": {
+          "type": "string",
+          "pattern": "^[0-9]{4}$"
+        },
+        "senderName": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "presetId": {
+          "type": "string",
+          "enum": ["MUCHO_ANIMO", "TU_PUEDES", "SIGUE_ASI", "CUSTOM"]
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "ttlSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 300,
+          "default": 60
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "CheerStatusEvent",
+      "type": "object",
+      "required": [
+        "type",
+        "notificationId",
+        "sessionId",
+        "status",
+        "timestamp"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "CHEER_STATUS_UPDATE"
+        },
+        "notificationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ENVIADO",
+            "EN_RELOJ",
+            "AGRADECIDO",
+            "EXPIRADO"
+          ]
+        },
+        "runnerReplyText": {
+          "type": "string",
+          "description": "Formatted gratitude text, e.g. 'Víctor te lo agradece'"
+        },
+        "timestamp": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

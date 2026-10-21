@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Garmin Fenix 7s - Native Run with Top Banner Overlay</title>
+  <link rel="stylesheet" href="./tokens.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Inter:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0F172A;
+      color: #FFFFFF;
+      font-family: 'Inter', sans-serif;
+    }
+    .font-garmin {
+      font-family: 'JetBrains Mono', monospace;
+      font-feature-settings: "tnum" 1;
+    }
+    /* Circular Garmin Display 260x260 px */
+    .garmin-screen {
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: #000000;
+      position: relative;
+      overflow: hidden;
+      border: 4px solid #1E293B;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
+  <div class="text-center text-slate-300 text-sm font-semibold">
+    Garmin Fenix 7s (260x260 Transflective MIP Display)
+    <span class="block text-xs text-slate-400 font-normal">Connect IQ Data Field en Carrera Nativa</span>
+  </div>
+
+  <!-- Physical Watch Bezel Container -->
+  <div class="relative p-7 rounded-full bg-slate-800 border-[8px] border-slate-700 shadow-2xl flex items-center justify-center">
+    
+    <!-- 5 Physical Button Labels -->
+    <span class="absolute -top-3 text-[10px] font-bold text-slate-400">FENIX 7s</span>
+    <span class="absolute -left-5 top-14 text-[9px] font-bold text-slate-500">LIGHT</span>
+    <span class="absolute -left-4 top-28 text-[9px] font-bold text-slate-500">UP</span>
+    <span class="absolute -left-5 bottom-14 text-[9px] font-bold text-slate-500">DOWN</span>
+    <span class="absolute -right-7 top-14 text-[9px] font-bold text-amber-400">START ↵</span>
+    <span class="absolute -right-6 bottom-14 text-[9px] font-bold text-slate-500">BACK</span>
+
+    <!-- 260x260 Circular Screen -->
+    <main class="garmin-screen flex flex-col justify-between text-white select-none">
+      
+      <!-- TOP BANNER OVERLAY (Spectator Cheer Banner) -->
+      <div class="z-20 bg-slate-900 border-b-2 border-amber-400 px-4 pt-3 pb-2 text-center shadow-lg">
+        <div class="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-widest">
+          <svg class="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/></svg>
+          Ánimo de Laura
+        </div>
+        <p class="text-xs font-bold text-white mt-0.5 leading-tight">"¡Mucho ánimo!"</p>
+        <div class="flex justify-between items-center text-[9px] text-slate-400 mt-1 pt-1 border-t border-slate-800">
+          <span class="text-amber-400">[START] Agradecer</span>
+          <span class="text-slate-400">[BACK] Descartar</span>
+        </div>
+      </div>
+
+      <!-- NATIVE RUNNING DATA FIELDS (Visible Below Banner) -->
+      <div class="z-10 flex-1 flex flex-col justify-center px-4 space-y-1 mt-1 text-center">
+        
+        <!-- Field 1: Ritmo (Pace) -->
+        <div class="border-b border-slate-800 pb-1">
+          <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Ritmo</span>
+          <span class="text-3xl font-garmin font-extrabold text-white">4:22</span>
+        </div>
+
+        <!-- Field 2 & 3: HR & Distance -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Pulso</span>
+            <span class="text-xl font-garmin font-bold text-rose-400">158</span>
+          </div>
+          <div>
+            <span class="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Distancia</span>
+            <span class="text-xl font-garmin font-bold text-white">10.4</span>
+            <span class="text-[10px] text-slate-400">km</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Status Bar -->
+      <div class="z-10 pb-1 text-center text-[9px] text-slate-500 font-mono">
+        <span>00:48:15 · GPS 3D</span>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="text-xs text-slate-400 max-w-sm text-center">
+    Al presionar <strong>START</strong> en el reloj durante el banner, se transmite la señal BLE a Android y la web muestra instantáneamente: <em>"Víctor te lo agradece"</em>.
+  </div>
+</body>
+</html>

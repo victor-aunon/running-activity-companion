@@ -1,0 +1,23 @@
+# Extensions and Lifecycle Hooks for Vite+ and Stitch Quality Gates
+schema_version: "1.0"
+hooks:
+  after_task:
+    - name: "viteplus-quality-gate"
+      description: "Runs vp check (Airbnb linter, Oxlint, types, complexity, and architecture layer boundaries)"
+      command: ".specify/scripts/bash/check-quality-gate.sh"
+      optional: false
+
+    - name: "stitch-visual-gate"
+      description: "Runs Playwright visual audit against Stitch screenshots when applicable"
+      command: ".specify/scripts/bash/verify-stitch-design.sh"
+      optional: false
+
+  after_implement:
+    - name: "final-quality-gate"
+      description: "Comprehensive final verification of quality and architecture"
+      command: ".specify/scripts/bash/check-quality-gate.sh"
+      optional: false
+    - name: "final-visual-gate"
+      description: "Comprehensive final visual audit against Stitch designs"
+      command: ".specify/scripts/bash/verify-stitch-design.sh"
+      optional: false
