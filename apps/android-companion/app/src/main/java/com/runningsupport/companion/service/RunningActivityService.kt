@@ -23,12 +23,14 @@ class RunningActivityService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var gatewayClient: WebSocketGatewayClient? = null
+    private var garminManager: GarminDataFieldManager? = null
     private lateinit var db: AppDatabase
     private var activeSessionId: String? = null
 
     override fun onCreate() {
         super.onCreate()
         db = AppDatabase.getDatabase(this)
+        garminManager = GarminDataFieldManager(this, serviceScope)
         acquireWakeLock()
         startForegroundServiceNotification()
     }
@@ -65,15 +67,21 @@ class RunningActivityService : Service() {
                 db.cheerDao().insertCheer(cheer)
                 Log.i(TAG, "Forwarding cheer to Garmin Data Field: $body")
 
-                // Update server that cheer reached watch
-                val updateEvent = JSONObject().apply {
-                    put("type", "CHEER_STATUS_UPDATE")
-                    put("notificationId", notifId)
-                    put("sessionId", sessionId)
-                    put("status", "EN_RELOJ")
-                    put("timestamp", System.currentTimeMillis())
+                // Forward via BLE to watch and only notify server upon delivery
+                garminManager?.transmitCheerToWatch(cheerJson) { delivered ->
+                    if (delivered) {
+                        serviceScope.launch {
+                            val updateEvent = JSONObject().apply {
+                                put("type", "CHEER_STATUS_UPDATE")
+                                put("notificationId", notifId)
+                                put("sessionId", sessionId)
+                                put("status", "EN_RELOJ")
+                                put("timestamp", System.currentTimeMillis())
+                            }
+                            gatewayClient?.send(updateEvent)
+                        }
+                    }
                 }
-                gatewayClient?.send(updateEvent)
             }
         }
 

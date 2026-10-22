@@ -3,11 +3,14 @@ import Toybox.Activity;
 import Toybox.Position;
 import Toybox.Sensor;
 import Toybox.System;
+import Toybox.Time;
+import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Application;
 
 class RunningSupportDataField extends WatchUi.DataField {
     private var transmitter as BleTransmitter;
+    private var overlay as NotificationBannerOverlay;
     private var seqNumber as Lang.Number = 0;
     private var lastValidLat as Lang.Double = 40.4168d;
     private var lastValidLng as Lang.Double = -3.7038d;
@@ -16,7 +19,15 @@ class RunningSupportDataField extends WatchUi.DataField {
     function initialize() {
         DataField.initialize();
         transmitter = new BleTransmitter();
+        overlay = new NotificationBannerOverlay();
+        transmitter.setCheerCallback(method(:onCheerReceived));
         checkServiceEnabled();
+    }
+
+    public function onCheerReceived(cheerData as Lang.Dictionary) as Void {
+        if (overlay != null) {
+            overlay.showCheer(cheerData);
+        }
     }
 
     private function checkServiceEnabled() as Void {
@@ -63,11 +74,13 @@ class RunningSupportDataField extends WatchUi.DataField {
             paceSecPerKm = 1000.0f / speedMps;
         }
 
-        // 3. Assemble Telemetry Dictionary
+        var epochMs = Time.now().value().toLong() * 1000L;
+
+        // 3. Assemble Telemetry Dictionary adhering to schema
         var payload = {
             "type" => "TELEMETRY_SNAPSHOT",
             "seq" => seqNumber,
-            "timestamp" => System.getTimer(),
+            "timestamp" => epochMs,
             "coordinates" => {
                 "lat" => lastValidLat,
                 "lng" => lastValidLng,
@@ -88,5 +101,25 @@ class RunningSupportDataField extends WatchUi.DataField {
         };
 
         transmitter.transmit(payload);
+    }
+
+    // Render hook: native data field display plus top cheer banner overlay
+    function onUpdate(dc as Graphics.Dc) as Void {
+        View.onUpdate(dc);
+        if (overlay != null && overlay.isActive()) {
+            overlay.draw(dc);
+        }
+    }
+
+    public function getIsServiceEnabled() as Lang.Boolean {
+        return isServiceEnabled;
+    }
+
+    public function getTransmitter() as BleTransmitter {
+        return transmitter;
+    }
+
+    public function getOverlay() as NotificationBannerOverlay {
+        return overlay;
     }
 }

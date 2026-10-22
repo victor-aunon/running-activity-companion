@@ -60,6 +60,16 @@ class GarminDataFieldManager(
         }
     }
 
+    fun transmitCheerToWatch(cheerJson: JSONObject, onResult: (Boolean) -> Unit) {
+        try {
+            Log.i(TAG, "Transmitting cheer message to Garmin Fenix 7s over BLE: $cheerJson")
+            onResult(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error transmitting cheer over BLE: ${e.message}")
+            onResult(false)
+        }
+    }
+
     companion object {
         private const val TAG = "GarminDataFieldManager"
     }

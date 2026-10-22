@@ -1,5 +1,6 @@
 import Toybox.WatchUi;
 import Toybox.System;
+import Toybox.Time;
 import Toybox.Lang;
 
 class DataFieldMenuDelegate extends WatchUi.BehaviorDelegate {
@@ -17,11 +18,12 @@ class DataFieldMenuDelegate extends WatchUi.BehaviorDelegate {
         if (notifId != null) {
             System.println("Runner acknowledged cheer: " + notifId);
 
+            var nowMs = Time.now().value().toLong() * 1000L;
             var replyPayload = {
                 "type" => "CHEER_STATUS_UPDATE",
                 "notificationId" => notifId,
                 "status" => "AGRADECIDO",
-                "timestamp" => System.getTimer()
+                "timestamp" => nowMs
             };
 
             transmitter.transmit(replyPayload);

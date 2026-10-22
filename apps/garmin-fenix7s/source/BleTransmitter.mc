@@ -8,6 +8,7 @@ class BleTransmitter {
     private var ringBuffer as Lang.Array<Lang.Dictionary> = [];
     private const MAX_BUFFER_SIZE = 10;
     private var retryTimer as Timer.Timer?;
+    private var cheerCallback as (Lang.Method(cheerData as Lang.Dictionary) as Void)?;
 
     function initialize() {
         ringBuffer = [];
@@ -17,6 +18,10 @@ class BleTransmitter {
 
     private function setupListener() as Void {
         Communications.setMailboxListener(method(:onMailboxMessage));
+    }
+
+    public function setCheerCallback(callback as (Lang.Method(cheerData as Lang.Dictionary) as Void)) as Void {
+        cheerCallback = callback;
     }
 
     public function transmit(payload as Lang.Dictionary) as Void {
@@ -31,7 +36,7 @@ class BleTransmitter {
     public function bufferPayload(payload as Lang.Dictionary) as Void {
         if (ringBuffer.size() >= MAX_BUFFER_SIZE) {
             // Drop oldest packet (FIFO) to strictly protect heap
-            ringBuffer.slice(1, ringBuffer.size());
+            ringBuffer = ringBuffer.slice(1, ringBuffer.size());
         }
         ringBuffer.add(payload);
         scheduleRetry();
@@ -56,6 +61,7 @@ class BleTransmitter {
     public function onRetryTrigger() as Void {
         if (ringBuffer.size() > 0) {
             var nextPayload = ringBuffer[0];
+            ringBuffer = ringBuffer.slice(1, ringBuffer.size());
             var listener = new CommListener(self, nextPayload);
             Communications.transmit(nextPayload, null, listener);
         }
@@ -73,9 +79,24 @@ class BleTransmitter {
         var msg = mailIter.next();
         while (msg != null) {
             System.println("Received incoming BLE packet from Android companion");
+            if (cheerCallback != null && msg instanceof Lang.Dictionary) {
+                cheerCallback.invoke(msg as Lang.Dictionary);
+            }
             msg = mailIter.next();
         }
         Communications.emptyMailbox();
+    }
+
+    public function getBufferSize() as Lang.Number {
+        return ringBuffer.size();
+    }
+
+    public function getBufferItem(index as Lang.Number) as Lang.Dictionary {
+        return ringBuffer[index];
+    }
+
+    public function getIsConnected() as Lang.Boolean {
+        return isConnected;
     }
 }
 

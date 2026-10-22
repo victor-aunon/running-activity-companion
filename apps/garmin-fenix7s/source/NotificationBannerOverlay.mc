@@ -101,4 +101,8 @@ class NotificationBannerOverlay {
         }
         return null;
     }
+
+    public function isActive() as Lang.Boolean {
+        return isVisible;
+    }
 }
