@@ -1,0 +1,14 @@
+{
+  "name": "@running-support/shared-contracts",
+  "version": "1.0.0",
+  "description": "Single source of truth JSON schemas, TypeScript types, and validation contracts for running telemetry and spectator cheers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js || true"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://running-support.local/schemas/telemetry.schema.json",
+  "title": "TelemetrySnapshotPacket",
+  "description": "Schema for 1 Hz telemetry packets streamed from Garmin/Android to Web",
+  "type": "object",
+  "required": [
+    "type",
+    "sessionId",
+    "seq",
+    "timestamp",
+    "coordinates",
+    "metrics"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "TELEMETRY_SNAPSHOT"
+    },
+    "sessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Epoch timestamp in milliseconds"
+    },
+    "coordinates": {
+      "type": "object",
+      "required": ["lat", "lng", "elevationM"],
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90.0,
+          "maximum": 90.0
+        },
+        "lng": {
+          "type": "number",
+          "minimum": -180.0,
+          "maximum": 180.0
+        },
+        "elevationM": {
+          "type": "number"
+        },
+        "gpsQuality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "default": 4,
+          "description": "Garmin Position.Quality indicator: 0 = NOT_AVAILABLE, 1 = LAST_KNOWN, 2 = POOR, 3 = USABLE, 4 = GOOD"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "heartRateBpm",
+        "speedMps",
+        "paceSecPerKm",
+        "cadenceSpm",
+        "totalDistanceM",
+        "elapsedSeconds"
+      ],
+      "properties": {
+        "heartRateBpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 250
+        },
+        "speedMps": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "paceSecPerKm": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "cadenceSpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "stepCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative workout step count"
+        },
+        "totalDistanceM": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "elapsedSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "deviceHealth": {
+      "type": "object",
+      "properties": {
+        "watchBatteryPct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "phoneBatteryPct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "bleRssi": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

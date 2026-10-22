@@ -1,0 +1,3 @@
+<properties>
+    <property id="ServiceEnabled" type="boolean">true</property>
+</properties>

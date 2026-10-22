@@ -1,0 +1,21 @@
+{
+  "name": "running-activity-support",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time running activity support ecosystem (Next.js + Android 16 + Garmin Connect IQ)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=apps/web-dashboard run dev",
+    "build": "npm --workspace=packages/shared-contracts run build && npm --workspace=apps/web-dashboard run build",
+    "test": "npm --workspace=packages/shared-contracts run test && npm --workspace=apps/web-dashboard run test",
+    "simulate:runner": "npm --workspace=apps/web-dashboard run simulate:runner",
+    "quality-gate": ".specify/scripts/bash/check-quality-gate.sh",
+    "visual-gate": ".specify/scripts/bash/verify-stitch-design.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

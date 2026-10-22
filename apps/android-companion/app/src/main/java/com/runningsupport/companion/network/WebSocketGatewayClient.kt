@@ -1,0 +1,118 @@
+package com.runningsupport.companion.network
+
+import android.util.Log
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import okhttp3.*
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+class WebSocketGatewayClient(
+    private val serverUrl: String,
+    private val token: String,
+    private val scope: CoroutineScope
+) {
+    private val client = OkHttpClient.Builder()
+        .pingInterval(15, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    private var webSocket: WebSocket? = null
+    private var isConnected = false
+    private var shouldReconnect = true
+
+    private val _incomingCheers = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64)
+    val incomingCheers: SharedFlow<JSONObject> = _incomingCheers
+
+    private val _connectionState = MutableSharedFlow<Boolean>(replay = 1)
+    val connectionState: SharedFlow<Boolean> = _connectionState
+
+    fun connect() {
+        shouldReconnect = true
+        val fullUrl = "$serverUrl?token=$token&role=gateway"
+        val request = Request.Builder().url(fullUrl).build()
+
+        webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) {
+                isConnected = true
+                _connectionState.tryEmit(true)
+                Log.i(TAG, "Gateway WebSocket connected to $fullUrl")
+            }
+
+            override fun onMessage(ws: WebSocket, text: String) {
+                try {
+                    val json = JSONObject(text)
+                    val type = json.optString("type")
+                    if (type == "DISPATCH_CHEER") {
+                        _incomingCheers.tryEmit(json)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing incoming WebSocket frame: ${e.message}")
+                }
+            }
+
+            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                isConnected = false
+                _connectionState.tryEmit(false)
+            }
+
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                isConnected = false
+                _connectionState.tryEmit(false)
+                Log.w(TAG, "WebSocket failure: ${t.message}. Reconnecting in 3s...")
+                if (shouldReconnect) {
+                    scope.launch {
+                        delay(3000)
+                        connect()
+                    }
+                }
+            }
+        })
+    }
+
+    fun send(payload: JSONObject): Boolean {
+        return webSocket?.send(payload.toString()) ?: false
+    }
+
+    suspend fun drainBuffer(
+        sessionId: String,
+        fetchBatch: suspend (String, Int) -> List<Pair<Long, JSONObject>>,
+        markSynced: suspend (List<Long>) -> Unit
+    ) {
+        if (!isConnected || webSocket == null) return
+
+        while (isConnected) {
+            val batch = fetchBatch(sessionId, 50)
+            if (batch.isEmpty()) break
+
+            val syncedIds = mutableListOf<Long>()
+            for ((id, json) in batch) {
+                if (send(json)) {
+                    syncedIds.add(id)
+                } else {
+                    break
+                }
+            }
+
+            if (syncedIds.isNotEmpty()) {
+                markSynced(syncedIds)
+            } else {
+                delay(1000)
+                break
+            }
+        }
+    }
+
+    fun disconnect() {
+        shouldReconnect = false
+        webSocket?.close(1000, "Normal closure")
+        webSocket = null
+        isConnected = false
+        _connectionState.tryEmit(false)
+    }
+
+    companion object {
+        private const val TAG = "WebSocketGatewayClient"
+    }
+}

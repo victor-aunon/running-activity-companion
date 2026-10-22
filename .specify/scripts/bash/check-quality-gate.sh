@@ -82,11 +82,16 @@ fi
 # 2. Run unified quality check
 echo "Executing vp check (Airbnb Linter + Oxlint + TypeScript Types + Complexity)..."
 
+VP_DIR_ARG=""
+if [ -d "apps/web-dashboard" ]; then
+  VP_DIR_ARG="-C apps/web-dashboard"
+fi
+
 CHECK_STATUS=0
 if [ "$AUTO_FIX" = true ]; then
-  $VP_CMD check --fix || CHECK_STATUS=$?
+  $VP_CMD $VP_DIR_ARG check --fix || CHECK_STATUS=$?
 else
-  $VP_CMD check || CHECK_STATUS=$?
+  $VP_CMD $VP_DIR_ARG check || CHECK_STATUS=$?
 fi
 
 if [ $CHECK_STATUS -ne 0 ]; then
