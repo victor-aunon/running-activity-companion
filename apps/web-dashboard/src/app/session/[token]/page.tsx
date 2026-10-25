@@ -13,12 +13,17 @@ import {
 } from '../../../utils/formatters';
 import { MapTile } from '../../../components/bento/MapTile';
 import { CheerWallTile } from '../../../components/bento/CheerWallTile';
+import { SpotifyPlayerTile } from '../../../components/bento/SpotifyPlayerTile';
 import { SessionSummaryModal } from '../../../components/bento/SessionSummaryModal';
 import { useSpectatorCheer } from '../../../hooks/useSpectatorCheer';
+import { useNowPlaying } from '../../../hooks/useNowPlaying';
 import type { HeartRateZoneResult } from '../../../types/telemetry';
 import type { RunningMetrics, TelemetrySnapshotPacket } from '@running-support/shared-contracts';
 import { Heart, Gauge, Flag, Footprints } from 'lucide-react';
-import { MOCK_STITCH_FIXTURE } from '../../../fixtures/stitchVisualMock';
+import {
+  MOCK_STITCH_FIXTURE,
+  MOCK_STITCH_NOW_PLAYING_IDLE,
+} from '../../../fixtures/stitchVisualMock';
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -234,6 +239,7 @@ interface MainDashboardProps {
   resolveZone: (b: number) => HeartRateZoneResult;
   pathCoordinates: [number, number][];
   spectator: ReturnType<typeof useSpectatorCheer>;
+  nowPlaying: ReturnType<typeof useNowPlaying>;
   targetDistanceKm?: number;
   targetPaceSecPerKm?: number;
   maxHeartRateBpm?: number;
@@ -248,6 +254,7 @@ interface MapAndCheerProps {
   vm: ReturnType<typeof extractViewMetrics>;
   pathCoordinates: [number, number][];
   spectator: ReturnType<typeof useSpectatorCheer>;
+  nowPlaying: ReturnType<typeof useNowPlaying>;
   routeName?: string;
   elevationText?: string;
   eta?: string;
@@ -259,6 +266,7 @@ function MapAndCheerColumns({
   vm,
   pathCoordinates,
   spectator,
+  nowPlaying,
   routeName,
   elevationText,
   eta,
@@ -280,7 +288,13 @@ function MapAndCheerColumns({
           elevationProfileText={elevationText}
         />
       </div>
-      <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-full">
+      <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-full gap-4">
+        <SpotifyPlayerTile
+          track={nowPlaying.track}
+          playbackStatus={nowPlaying.playbackStatus}
+          currentPositionMs={nowPlaying.currentPositionMs}
+          athleteName={athleteName}
+        />
         <CheerWallTile
           cheers={spectator.cheers}
           onSendCheer={spectator.sendCheer}
@@ -304,6 +318,7 @@ function MainDashboardContent({
   resolveZone,
   pathCoordinates,
   spectator,
+  nowPlaying,
   targetDistanceKm,
   targetPaceSecPerKm,
   maxHeartRateBpm,
@@ -328,6 +343,7 @@ function MainDashboardContent({
         vm={vm}
         pathCoordinates={pathCoordinates}
         spectator={spectator}
+        nowPlaying={nowPlaying}
         routeName={routeName}
         elevationText={elevationText}
         eta={eta}
@@ -353,6 +369,7 @@ interface DashboardLayoutProps {
   resolveZone: (b: number) => HeartRateZoneResult;
   pathCoordinates: [number, number][];
   spectator: ReturnType<typeof useSpectatorCheer>;
+  nowPlaying: ReturnType<typeof useNowPlaying>;
   config?: FixtureConfig;
   elevationText?: string;
   eta?: string;
@@ -395,6 +412,7 @@ function DashboardLayout({
   resolveZone,
   pathCoordinates,
   spectator,
+  nowPlaying,
   config,
   elevationText,
   eta,
@@ -415,6 +433,7 @@ function DashboardLayout({
           resolveZone={resolveZone}
           pathCoordinates={pathCoordinates}
           spectator={spectator}
+          nowPlaying={nowPlaying}
           targetDistanceKm={21.1}
           targetPaceSecPerKm={267}
           maxHeartRateBpm={174}
@@ -463,11 +482,20 @@ function resolveLiveMetrics(
   };
 }
 
+function resolveInitialNowPlaying(
+  searchParams: { get: (k: string) => string | null },
+  mockFixture: typeof MOCK_STITCH_FIXTURE | undefined,
+) {
+  if (searchParams.get('nowPlaying') === 'idle') {
+    return MOCK_STITCH_NOW_PLAYING_IDLE;
+  }
+  return mockFixture?.nowPlaying ?? null;
+}
+
 function SessionDashboardInner({ token }: { token: string }) {
   const searchParams = useSearchParams();
   const mockFixture = getInitialFixture(searchParams);
-  const queryPin = searchParams.get('pin');
-  const init = resolveInnerDashboardParams(mockFixture, queryPin);
+  const init = resolveInnerDashboardParams(mockFixture, searchParams.get('pin'));
 
   const { telemetry, sessionStatus, pathCoordinates, elevationHistory, client } = useLiveTelemetry({
     token,
@@ -477,25 +505,27 @@ function SessionDashboardInner({ token }: { token: string }) {
   const { resolveZone } = useEffortZones();
   const [isDismissed, setIsDismissed] = useState(false);
 
-  const sessionId = telemetry ? telemetry.sessionId : token;
   const spectator = useSpectatorCheer({
     client,
-    sessionId,
+    sessionId: telemetry ? telemetry.sessionId : token,
     initialCheers: init.initialCheers,
     initialPin: init.initialPin,
   });
 
   const vm = extractViewMetrics(telemetry, sessionStatus);
   const live = resolveLiveMetrics(mockFixture, vm, elevationHistory);
-
-  const handleRefresh = () => {
-    if (client) {
-      client.disconnect();
-      client.connect();
-    }
-  };
+  const nowPlaying = useNowPlaying({
+    client,
+    initialNowPlaying: resolveInitialNowPlaying(searchParams, mockFixture),
+  });
 
   const activePin = spectator.pin || init.initialPin || init.fallbackPin;
+  const onRefresh = client
+    ? () => {
+        client.disconnect();
+        client.connect();
+      }
+    : undefined;
 
   return (
     <DashboardLayout
@@ -503,13 +533,14 @@ function SessionDashboardInner({ token }: { token: string }) {
       resolveZone={resolveZone}
       pathCoordinates={pathCoordinates}
       spectator={spectator}
+      nowPlaying={nowPlaying}
       config={mockFixture ? mockFixture.config : undefined}
       elevationText={live.elevationText}
       eta={live.eta}
       isCompleted={vm.isCompleted}
       isDismissed={isDismissed}
       onDismiss={() => setIsDismissed(true)}
-      onRefresh={handleRefresh}
+      onRefresh={onRefresh}
       displayPin={activePin}
     />
   );

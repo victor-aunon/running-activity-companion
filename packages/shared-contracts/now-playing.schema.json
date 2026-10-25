@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NowPlayingUpdatePacket",
+  "description": "Schema for Spotify playback and track updates from runner's Android companion to web dashboard",
+  "type": "object",
+  "required": ["type", "sessionId", "timestamp", "playback"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "NOW_PLAYING_UPDATE"
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "playback": {
+      "type": "object",
+      "required": ["state", "positionMs", "capturedAt"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["PLAYING", "PAUSED", "STOPPED", "NONE"]
+        },
+        "positionMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capturedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "isLiveSync": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "track": {
+      "type": ["object", "null"],
+      "properties": {
+        "trackId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "artist": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "album": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "artworkUrl": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "spotifyUrl": {
+          "type": "string"
+        }
+      },
+      "required": ["trackId", "title", "artist", "durationMs", "spotifyUrl"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

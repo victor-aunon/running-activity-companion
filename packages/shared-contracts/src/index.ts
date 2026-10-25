@@ -111,12 +111,40 @@ export interface PongMessage {
   timestamp: number;
 }
 
+export type PlaybackState = 'PLAYING' | 'PAUSED' | 'STOPPED' | 'NONE';
+
+export interface RunnerTrackInfo {
+  trackId: string;
+  title: string;
+  artist: string;
+  album?: string;
+  artworkUrl?: string;
+  durationMs: number;
+  spotifyUrl: string;
+}
+
+export interface RunnerPlaybackStatus {
+  state: PlaybackState;
+  positionMs: number;
+  capturedAt: number;
+  isLiveSync?: boolean;
+}
+
+export interface NowPlayingUpdatePacket {
+  type: 'NOW_PLAYING_UPDATE';
+  sessionId: string;
+  timestamp: number;
+  playback: RunnerPlaybackStatus;
+  track: RunnerTrackInfo | null;
+}
+
 export type WebSocketUplinkMessage =
   | TelemetrySnapshotPacket
   | SessionStateChangedEvent
   | CheerStatusEvent
   | GatewayRegisterMessage
   | DispatchCheerCommand
+  | NowPlayingUpdatePacket
   | PingMessage;
 
 export type WebSocketDownlinkMessage =
@@ -125,6 +153,7 @@ export type WebSocketDownlinkMessage =
   | CheerStatusEvent
   | SessionStateChangedEvent
   | GatewayRegisterAck
+  | NowPlayingUpdatePacket
   | ProtocolError
   | PongMessage;
 
@@ -178,3 +207,41 @@ export function isSessionStateChangedEvent(msg: unknown): msg is SessionStateCha
     typeof m.timestamp === 'number'
   );
 }
+
+export function isNowPlayingUpdatePacket(msg: unknown): msg is NowPlayingUpdatePacket {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Record<string, unknown>;
+  if (m.type !== 'NOW_PLAYING_UPDATE' || typeof m.sessionId !== 'string' || typeof m.timestamp !== 'number') {
+    return false;
+  }
+  if (typeof m.playback !== 'object' || m.playback === null) {
+    return false;
+  }
+  const pb = m.playback as Record<string, unknown>;
+  const validStates = ['PLAYING', 'PAUSED', 'STOPPED', 'NONE'];
+  if (
+    typeof pb.state !== 'string' ||
+    !validStates.includes(pb.state) ||
+    typeof pb.positionMs !== 'number' ||
+    typeof pb.capturedAt !== 'number'
+  ) {
+    return false;
+  }
+  if (m.track !== null) {
+    if (typeof m.track !== 'object' || m.track === null) {
+      return false;
+    }
+    const tr = m.track as Record<string, unknown>;
+    if (
+      typeof tr.trackId !== 'string' ||
+      typeof tr.title !== 'string' ||
+      typeof tr.artist !== 'string' ||
+      typeof tr.durationMs !== 'number' ||
+      typeof tr.spotifyUrl !== 'string'
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+

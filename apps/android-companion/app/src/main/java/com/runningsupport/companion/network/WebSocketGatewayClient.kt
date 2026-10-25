@@ -75,6 +75,47 @@ class WebSocketGatewayClient(
         return webSocket?.send(payload.toString()) ?: false
     }
 
+    fun sendNowPlayingUpdate(
+        sessionId: String,
+        state: String,
+        positionMs: Long,
+        trackId: String?,
+        title: String?,
+        artist: String?,
+        album: String?,
+        artworkUrl: String?,
+        durationMs: Long?,
+        spotifyUrl: String?
+    ): Boolean {
+        val packet = JSONObject().apply {
+            put("type", "NOW_PLAYING_UPDATE")
+            put("sessionId", sessionId)
+            put("timestamp", System.currentTimeMillis())
+            val playbackObj = JSONObject().apply {
+                put("state", state)
+                put("positionMs", positionMs)
+                put("capturedAt", System.currentTimeMillis())
+                put("isLiveSync", true)
+            }
+            put("playback", playbackObj)
+            if (trackId != null && title != null && artist != null) {
+                val trackObj = JSONObject().apply {
+                    put("trackId", trackId)
+                    put("title", title)
+                    put("artist", artist)
+                    if (album != null) put("album", album)
+                    if (artworkUrl != null) put("artworkUrl", artworkUrl)
+                    put("durationMs", durationMs ?: 0L)
+                    put("spotifyUrl", spotifyUrl ?: "https://open.spotify.com/track/$trackId")
+                }
+                put("track", trackObj)
+            } else {
+                put("track", JSONObject.NULL)
+            }
+        }
+        return send(packet)
+    }
+
     suspend fun drainBuffer(
         sessionId: String,
         fetchBatch: suspend (String, Int) -> List<Pair<Long, JSONObject>>,

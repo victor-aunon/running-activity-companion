@@ -24,6 +24,7 @@ class RunningActivityService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var gatewayClient: WebSocketGatewayClient? = null
     private var garminManager: GarminDataFieldManager? = null
+    private var spotifyManager: SpotifyMediaSessionService? = null
     private lateinit var db: AppDatabase
     private var activeSessionId: String? = null
 
@@ -43,6 +44,12 @@ class RunningActivityService : Service() {
 
         gatewayClient = WebSocketGatewayClient(serverUrl, token, serviceScope)
         gatewayClient?.connect()
+
+        spotifyManager = SpotifyMediaSessionService(this) { state, pos, id, title, artist, album, art, dur, url ->
+            val sId = activeSessionId ?: sessionId
+            gatewayClient?.sendNowPlayingUpdate(sId, state, pos, id, title, artist, album, art, dur, url)
+        }
+        spotifyManager?.register()
 
         // Listen for cheers from Web and forward to Garmin Data Field
         serviceScope.launch {
@@ -129,6 +136,8 @@ class RunningActivityService : Service() {
 
     override fun onDestroy() {
         serviceJob.cancel()
+        spotifyManager?.unregister()
+        spotifyManager = null
         gatewayClient?.disconnect()
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()

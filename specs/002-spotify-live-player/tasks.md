@@ -17,9 +17,9 @@
 
 **Purpose**: Project initialization and contract schema definition for Spotify Now Playing integration.
 
-- [ ] T001 Define JSON Schema Draft-07 for `NowPlayingUpdatePacket` in `packages/shared-contracts/now-playing.schema.json`
-- [ ] T002 [P] Export domain models (`RunnerTrackInfo`, `RunnerPlaybackStatus`, `NowPlayingUpdatePacket`) and type guard `isNowPlayingUpdatePacket` in `packages/shared-contracts/src/index.ts`
-- [ ] T003 [P] Build shared contracts package and verify bundle output in `packages/shared-contracts/package.json`
+- [x] T001 Define JSON Schema Draft-07 for `NowPlayingUpdatePacket` in `packages/shared-contracts/now-playing.schema.json`
+- [x] T002 [P] Export domain models (`RunnerTrackInfo`, `RunnerPlaybackStatus`, `NowPlayingUpdatePacket`) and type guard `isNowPlayingUpdatePacket` in `packages/shared-contracts/src/index.ts`
+- [x] T003 [P] Build shared contracts package and verify bundle output in `packages/shared-contracts/package.json`
 
 ---
 
@@ -29,10 +29,10 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 [P] Create Ajv-based contract test in `apps/web-dashboard/tests/contract/now-playing-contract.test.ts` validating valid and invalid `NowPlayingUpdatePacket` fixtures against `packages/shared-contracts/now-playing.schema.json`
-- [ ] T005 Implement in-memory state retention and broadcast routing for `NOW_PLAYING_UPDATE` messages in `apps/web-dashboard/src/services/RelayServerLogic.ts`
-- [ ] T006 [P] Extend WebSocket client message handler to parse and emit `NOW_PLAYING_UPDATE` packets in `apps/web-dashboard/src/services/WebSocketClient.ts`
-- [ ] T007 [P] Add mock fixture data for active and idle Spotify playback states in `apps/web-dashboard/src/fixtures/stitchVisualMock.ts`
+- [x] T004 [P] Create Ajv-based contract test in `apps/web-dashboard/tests/contract/now-playing-contract.test.ts` validating valid and invalid `NowPlayingUpdatePacket` fixtures against `packages/shared-contracts/now-playing.schema.json`
+- [x] T005 Implement in-memory state retention and broadcast routing for `NOW_PLAYING_UPDATE` messages in `apps/web-dashboard/src/services/RelayServerLogic.ts`
+- [x] T006 [P] Extend WebSocket client message handler to parse and emit `NOW_PLAYING_UPDATE` packets in `apps/web-dashboard/src/services/WebSocketClient.ts`
+- [x] T007 [P] Add mock fixture data for active and idle Spotify playback states in `apps/web-dashboard/src/fixtures/stitchVisualMock.ts`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
@@ -46,16 +46,16 @@
 
 ### Tests for User Story 1 (TDD Mandatory) ⚠️
 
-- [ ] T008 [P] [US1] Create unit tests for `useNowPlaying` hook in `apps/web-dashboard/tests/unit/useNowPlaying.test.ts` validating packet reception, progress interpolation formula (`currentPositionMs = Math.min(durationMs, positionMs + (now - capturedAt))`), and dynamic track updates
-- [ ] T009 [P] [US1] Create component unit tests for active track display in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying rendering of title, artist, album art image, and progress indicator
+- [x] T008 [P] [US1] Create unit tests for `useNowPlaying` hook in `apps/web-dashboard/tests/unit/useNowPlaying.test.ts` validating packet reception, progress interpolation formula (`currentPositionMs = Math.min(durationMs, positionMs + (now - capturedAt))`), and dynamic track updates
+- [x] T009 [P] [US1] Create component unit tests for active track display in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying rendering of title, artist, album art image, and progress indicator
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement `useNowPlaying` hook with 60fps client-side timer interpolation in `apps/web-dashboard/src/hooks/useNowPlaying.ts`
-- [ ] T011 [US1] Implement `SpotifyPlayerTile` active track layout with Aurora Light styling in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
-- [ ] T012 [US1] Integrate `SpotifyPlayerTile` into `MapAndCheerColumns` in `apps/web-dashboard/src/app/session/[token]/page.tsx` directly above `CheerWallTile` in the lateral Bento column (`lg:col-span-5 xl:col-span-4`)
-- [ ] T013 [P] [US1] Implement Android `SpotifyMediaSessionService` using `MediaSessionManager` / `NotificationListenerService` in `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/SpotifyMediaSessionService.kt` to extract `RunnerTrackInfo` and `RunnerPlaybackStatus`
-- [ ] T014 [US1] Wire Android companion to transmit `NowPlayingUpdatePacket` over WebSocket connection upon playback changes in `apps/android-companion/app/src/main/java/com/runningsupport/companion/network/WebSocketManager.kt`
+- [x] T010 [US1] Implement `useNowPlaying` hook with 60fps client-side timer interpolation in `apps/web-dashboard/src/hooks/useNowPlaying.ts`
+- [x] T011 [US1] Implement `SpotifyPlayerTile` active track layout with Aurora Light styling in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
+- [x] T012 [US1] Integrate `SpotifyPlayerTile` into `MapAndCheerColumns` in `apps/web-dashboard/src/app/session/[token]/page.tsx` directly above `CheerWallTile` in the lateral Bento column (`lg:col-span-5 xl:col-span-4`)
+- [x] T013 [P] [US1] Implement Android `SpotifyMediaSessionService` using `MediaSessionManager` / `NotificationListenerService` in `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/SpotifyMediaSessionService.kt` to extract `RunnerTrackInfo` and `RunnerPlaybackStatus`
+- [x] T014 [US1] Wire Android companion to transmit `NowPlayingUpdatePacket` over WebSocket connection upon playback changes in `apps/android-companion/app/src/main/java/com/runningsupport/companion/network/WebSocketManager.kt`
 
 **Checkpoint**: User Story 1 is fully functional and testable as an MVP increment.
 
@@ -69,14 +69,14 @@
 
 ### Tests for User Story 2 (TDD Mandatory) ⚠️
 
-- [ ] T015 [P] [US2] Create unit tests for idle and paused states in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying exact text `"No se está reproduciendo nada en el teléfono del corredor"` for `state === 'NONE'` / `'STOPPED'` y badge `"Pausado"` para `state === 'PAUSED'`
-- [ ] T016 [P] [US2] Create unit test in `apps/web-dashboard/tests/unit/useNowPlaying.test.ts` verifying automatic transition to idle state after 60 seconds in paused state without new events
+- [x] T015 [P] [US2] Create unit tests for idle and paused states in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying exact text `"No se está reproduciendo nada en el teléfono del corredor"` for `state === 'NONE'` / `'STOPPED'` y badge `"Pausado"` para `state === 'PAUSED'`
+- [x] T016 [P] [US2] Create unit test in `apps/web-dashboard/tests/unit/useNowPlaying.test.ts` verifying automatic transition to idle state after 60 seconds in paused state without new events
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Implement idle state UI card in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx` with light Aurora Bento styling (`bg-white/80`, `border-slate-200/60`, `rounded-2xl`, muted music icon) and exact text display
-- [ ] T018 [US2] Handle idle and paused transition logic in `apps/web-dashboard/src/hooks/useNowPlaying.ts`
-- [ ] T019 [US2] Implement idle state detection in Android companion when Spotify session terminates or is paused in `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/SpotifyMediaSessionService.kt`
+- [x] T017 [US2] Implement idle state UI card in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx` with light Aurora Bento styling (`bg-white/80`, `border-slate-200/60`, `rounded-2xl`, muted music icon) and exact text display
+- [x] T018 [US2] Handle idle and paused transition logic in `apps/web-dashboard/src/hooks/useNowPlaying.ts`
+- [x] T019 [US2] Implement idle state detection in Android companion when Spotify session terminates or is paused in `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/SpotifyMediaSessionService.kt`
 
 **Checkpoint**: User Stories 1 AND 2 work independently and transition smoothly between each other.
 
@@ -90,13 +90,13 @@
 
 ### Tests for User Story 3 (TDD Mandatory) ⚠️
 
-- [ ] T020 [P] [US3] Create unit tests in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying Spotify Embed iframe attributes (`src="https://open.spotify.com/embed/track/..."`, `height="80"`), deep-link button (`target="_blank"` a `spotifyUrl`), y aislamiento estricto de controles locales sin mensajes salientes hacia el corredor
+- [x] T020 [P] [US3] Create unit tests in `apps/web-dashboard/tests/unit/SpotifyPlayerTile.test.ts` verifying Spotify Embed iframe attributes (`src="https://open.spotify.com/embed/track/..."`, `height="80"`), deep-link button (`target="_blank"` a `spotifyUrl`), y aislamiento estricto de controles locales sin mensajes salientes hacia el corredor
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Integrate the official Spotify Embed iframe (`compact bar mode`, height 80px) in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx` with graceful skeleton loading
-- [ ] T022 [US3] Add accessible "Abrir en Spotify" deep-link action button in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
-- [ ] T023 [US3] Ensure spectator playback controls are strictly local and passive (zero outbound WebSocket commands to runner's device) in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
+- [x] T021 [US3] Integrate the official Spotify Embed iframe (`compact bar mode`, height 80px) in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx` with graceful skeleton loading
+- [x] T022 [US3] Add accessible "Abrir en Spotify" deep-link action button in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
+- [x] T023 [US3] Ensure spectator playback controls are strictly local and passive (zero outbound WebSocket commands to runner's device) in `apps/web-dashboard/src/components/bento/SpotifyPlayerTile.tsx`
 
 **Checkpoint**: All three user stories are complete, independently functional, and integrated.
 
@@ -106,10 +106,10 @@
 
 **Purpose**: Pruebas integradas de extremo a extremo, accesibilidad, responsividad y validación de quickstart.
 
-- [ ] T024 [P] Create CLI test runner simulator script in `apps/web-dashboard/scripts/simulate-now-playing.ts` to emit dynamic Spotify playback events over WebSocket
-- [ ] T025 [P] Audit responsive Bento layout across mobile (375px), tablet (768px) y desktop (1440px) en `apps/web-dashboard/src/app/session/[token]/page.tsx` verificando que no se produce layout shift ni desborde vertical
-- [ ] T026 Execute monorepo test suite verifying contract tests, unit tests, and regression tests with `pnpm test`
-- [ ] T027 Validate end-to-end scenarios per `specs/002-spotify-live-player/quickstart.md`
+- [x] T024 [P] Create CLI test runner simulator script in `apps/web-dashboard/scripts/simulate-now-playing.ts` to emit dynamic Spotify playback events over WebSocket
+- [x] T025 [P] Audit responsive Bento layout across mobile (375px), tablet (768px) y desktop (1440px) en `apps/web-dashboard/src/app/session/[token]/page.tsx` verificando que no se produce layout shift ni desborde vertical
+- [x] T026 Execute monorepo test suite verifying contract tests, unit tests, and regression tests with `pnpm test`
+- [x] T027 Validate end-to-end scenarios per `specs/002-spotify-live-player/quickstart.md`
 
 ---
 

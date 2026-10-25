@@ -9,6 +9,7 @@ interface RoomSession {
   spectatorPin?: string;
   athleteName?: string;
   lastTelemetry?: unknown;
+  lastNowPlaying?: unknown;
 }
 
 interface RateLimitTracker {
@@ -95,6 +96,34 @@ function handleDispatchCheer(
   );
 }
 
+function handleBroadcastOrTelemetry(room: RoomSession, msg: { type: string }) {
+  if (msg.type === 'TELEMETRY_SNAPSHOT') {
+    room.lastTelemetry = msg;
+  } else if (msg.type === 'NOW_PLAYING_UPDATE') {
+    room.lastNowPlaying = msg;
+  }
+  broadcastToSpectators(room, JSON.stringify(msg));
+}
+
+function parseRawMessage(raw: unknown) {
+  if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf-8'));
+  if (typeof raw === 'string') return JSON.parse(raw);
+  return JSON.parse(JSON.stringify(raw));
+}
+
+const MESSAGE_HANDLERS: Record<
+  string,
+  (ws: WebSocket, room: RoomSession, tracker: RateLimitTracker, msg: any) => void
+> = {
+  PING: (ws) => ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() })),
+  GATEWAY_REGISTER: (ws, room, _tracker, msg) => handleGatewayRegister(ws, room, msg),
+  DISPATCH_CHEER: (ws, room, tracker, msg) => handleDispatchCheer(ws, room, tracker, msg),
+  TELEMETRY_SNAPSHOT: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
+  NOW_PLAYING_UPDATE: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
+  SESSION_STATE_CHANGED: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
+  CHEER_STATUS_UPDATE: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
+};
+
 function handleSocketMessage(
   ws: WebSocket,
   room: RoomSession,
@@ -102,24 +131,10 @@ function handleSocketMessage(
   raw: unknown,
 ) {
   try {
-    const text = Buffer.isBuffer(raw)
-      ? raw.toString('utf-8')
-      : typeof raw === 'string'
-        ? raw
-        : JSON.stringify(raw);
-    const msg = JSON.parse(text);
-
-    if (msg.type === 'PING') {
-      ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
-    } else if (msg.type === 'GATEWAY_REGISTER') {
-      handleGatewayRegister(ws, room, msg);
-    } else if (msg.type === 'TELEMETRY_SNAPSHOT') {
-      room.lastTelemetry = msg;
-      broadcastToSpectators(room, JSON.stringify(msg));
-    } else if (msg.type === 'SESSION_STATE_CHANGED' || msg.type === 'CHEER_STATUS_UPDATE') {
-      broadcastToSpectators(room, JSON.stringify(msg));
-    } else if (msg.type === 'DISPATCH_CHEER') {
-      handleDispatchCheer(ws, room, tracker, msg);
+    const msg = parseRawMessage(raw);
+    const handler = MESSAGE_HANDLERS[msg.type];
+    if (handler) {
+      handler(ws, room, tracker, msg);
     }
   } catch {
     ws.send(
@@ -152,6 +167,7 @@ export function createRelayServer(wss: WebSocketServer) {
     } else {
       room.spectators.add(ws);
       if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
+      if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
     }
 
     const tracker: RateLimitTracker = { failedAttempts: 0, lockedUntil: 0 };

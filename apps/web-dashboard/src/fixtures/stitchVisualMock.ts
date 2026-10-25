@@ -1,4 +1,7 @@
-import type { TelemetrySnapshotPacket } from '@running-support/shared-contracts';
+import type {
+  TelemetrySnapshotPacket,
+  NowPlayingUpdatePacket,
+} from '@running-support/shared-contracts';
 import type { CheerItem } from '../types/cheer';
 
 export const MOCK_STITCH_TELEMETRY: TelemetrySnapshotPacket = {
@@ -76,9 +79,43 @@ export const MOCK_STITCH_CONFIG = {
   eta: '10:48 AM',
 };
 
+export const MOCK_STITCH_NOW_PLAYING_ACTIVE: NowPlayingUpdatePacket = {
+  type: 'NOW_PLAYING_UPDATE',
+  sessionId: '550e8400-e29b-41d4-a716-446655440000',
+  timestamp: 1792577000000,
+  playback: {
+    state: 'PLAYING',
+    positionMs: 84000,
+    capturedAt: 1792577000000,
+    isLiveSync: true,
+  },
+  track: {
+    trackId: '4cOdK2wGLETKBW3PvgPWqT',
+    title: 'The Pretender',
+    artist: 'Foo Fighters',
+    album: 'Echoes, Silence, Patience & Grace',
+    artworkUrl: 'https://i.scdn.co/image/ab67616d0000b273b5e434e7978280f1ef726cf9',
+    durationMs: 269000,
+    spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+  },
+};
+
+export const MOCK_STITCH_NOW_PLAYING_IDLE: NowPlayingUpdatePacket = {
+  type: 'NOW_PLAYING_UPDATE',
+  sessionId: '550e8400-e29b-41d4-a716-446655440000',
+  timestamp: 1792577000000,
+  playback: {
+    state: 'NONE',
+    positionMs: 0,
+    capturedAt: 1792577000000,
+  },
+  track: null,
+};
+
 export const MOCK_STITCH_FIXTURE = {
   telemetry: MOCK_STITCH_TELEMETRY,
   cheers: MOCK_STITCH_CHEERS,
   pathCoordinates: MOCK_STITCH_PATH,
+  nowPlaying: MOCK_STITCH_NOW_PLAYING_ACTIVE,
   config: MOCK_STITCH_CONFIG,
 };
