@@ -34,6 +34,7 @@ export class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay: number;
   private explicitlyClosed = false;
+  private lastPackets: Map<string, WebSocketDownlinkMessage> = new Map();
 
   constructor(options: WebSocketClientOptions) {
     this.clientId = options.clientId || `client-${Math.random().toString(36).slice(2, 10)}`;
@@ -92,6 +93,7 @@ export class WebSocketClient {
         try {
           const data = JSON.parse(event.data) as WebSocketDownlinkMessage;
           if (data.type === 'PONG') return;
+          this.lastPackets.set(data.type, data);
           this.messageHandlers.forEach((handler) => handler(data));
         } catch {
           // Ignore malformed frames gracefully
@@ -127,6 +129,13 @@ export class WebSocketClient {
 
   public onMessage(handler: MessageHandler): () => void {
     this.messageHandlers.add(handler);
+    this.lastPackets.forEach((cached) => {
+      try {
+        handler(cached);
+      } catch {
+        // Safe dispatch of cached packet
+      }
+    });
     return () => this.messageHandlers.delete(handler);
   }
 

@@ -33,12 +33,16 @@ class SpotifyMediaSessionService(
     private var isPlaying: Boolean = false
     private var currentPositionMs: Long = 0L
 
+    // Deduplication state to prevent broadcast spam
+    private var lastEmittedState: String? = null
+    private var lastEmittedTrackId: String? = null
+    private var lastEmittedTitle: String? = null
+
     fun register() {
         try {
             val filter = IntentFilter().apply {
                 addAction("com.spotify.music.metadatachanged")
                 addAction("com.spotify.music.playbackstatechanged")
-                addAction("com.spotify.music.queuechanged")
             }
 
             spotifyReceiver = object : BroadcastReceiver() {
@@ -68,7 +72,6 @@ class SpotifyMediaSessionService(
                                 val pos = intent.getIntExtra("playbackPosition", currentPositionMs.toInt()).toLong()
                                 currentPositionMs = pos
 
-                                // Fallback: check if metadata was also bundled in playbackstatechanged
                                 intent.getStringExtra("id")?.replace("spotify:track:", "")?.let {
                                     if (it.isNotBlank()) {
                                         cachedTrackId = it
@@ -86,7 +89,20 @@ class SpotifyMediaSessionService(
                         }
 
                         val state = if (isPlaying) "PLAYING" else "PAUSED"
-                        Log.d(TAG, "Spotify state: $state (action: $action, track: $cachedTitle, artist: $cachedArtist, pos: $currentPositionMs)")
+
+                        // Deduplicate: Don't spam relay if state and track have not changed
+                        if (state == lastEmittedState &&
+                            cachedTrackId == lastEmittedTrackId &&
+                            cachedTitle == lastEmittedTitle
+                        ) {
+                            return
+                        }
+
+                        lastEmittedState = state
+                        lastEmittedTrackId = cachedTrackId
+                        lastEmittedTitle = cachedTitle
+
+                        Log.d(TAG, "Spotify state: $state (track: $cachedTitle, artist: $cachedArtist, pos: $currentPositionMs)")
 
                         onPlaybackChanged(
                             state,

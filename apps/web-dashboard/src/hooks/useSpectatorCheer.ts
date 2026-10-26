@@ -1,22 +1,25 @@
+/**
+ * Hook for Spectator Cheers dispatch and local timeline tracking
+ */
+
 import { useState, useEffect, useCallback } from 'react';
-import type { WebSocketClient } from '../services/WebSocketClient';
-import type { CheerItem } from '../types/cheer';
 import type {
   CheerPreset,
-  CheerStatusEvent,
   ProtocolError,
   WebSocketDownlinkMessage,
 } from '@running-support/shared-contracts';
+import type { WebSocketClient } from '../services/WebSocketClient';
+import type { CheerItem } from '../types/cheer';
 
 export interface UseSpectatorCheerOptions {
-  client: WebSocketClient | null;
+  client?: WebSocketClient | null;
   sessionId?: string;
   initialCheers?: CheerItem[];
   initialPin?: string;
   initialSenderName?: string;
 }
 
-function updateCheerList(prev: CheerItem[], msg: CheerStatusEvent): CheerItem[] {
+function updateCheerList(prev: CheerItem[], msg: any): CheerItem[] {
   const index = prev.findIndex((c) => c.notificationId === msg.notificationId);
   if (index >= 0) {
     const updated = [...prev];
@@ -30,11 +33,11 @@ function updateCheerList(prev: CheerItem[], msg: CheerStatusEvent): CheerItem[] 
   return [
     {
       notificationId: msg.notificationId,
-      senderName: 'Anónimo',
-      body: '¡Mucho ánimo!',
+      senderName: msg.senderName || 'Espectador',
+      body: msg.body || '¡Ánimo!',
       status: msg.status,
       runnerReplyText: msg.runnerReplyText,
-      timestamp: Date.now(),
+      timestamp: msg.timestamp || Date.now(),
     },
     ...prev,
   ];
@@ -56,9 +59,9 @@ function handleProtocolError(
   const errMsg = msg as ProtocolError;
   if (errMsg.code === 'PIN_RATE_LIMITED') {
     setRateLimit(60);
-    setError(errMsg.message);
+    setError('Demasiados intentos fallidos. Bloqueado temporalmente durante 60s.');
   } else if (errMsg.code === 'UNAUTHORIZED_PIN') {
-    setError('PIN de espectador incorrecto');
+    setError('PIN de espectador incorrecto. El mensaje ha sido rechazado.');
   } else {
     setError(errMsg.message || 'Error en la solicitud');
   }
@@ -102,7 +105,7 @@ function sendCheerPacket(
   params: DispatchCheerParams,
   presetId: CheerPreset,
   body: string,
-): { success: boolean; item?: CheerItem } {
+): { success: boolean; notificationId?: string } {
   const { client, sessionId, pin, senderName } = params;
   if (!client || !sessionId) return { success: false };
   const notificationId = crypto.randomUUID();
@@ -119,16 +122,7 @@ function sendCheerPacket(
   };
   const sent = client.send(command);
   if (!sent) return { success: false };
-  return {
-    success: true,
-    item: {
-      notificationId,
-      senderName: displayName,
-      body: body.substring(0, 50),
-      status: 'ENVIADO',
-      timestamp: Date.now(),
-    },
-  };
+  return { success: true, notificationId };
 }
 
 interface CheerSenderState {
@@ -138,21 +132,13 @@ interface CheerSenderState {
   senderName: string;
   rateLimitSeconds: number;
   setSubmitting: (b: boolean) => void;
-  setErrorMsg: (m: string | null) => void;
+  setErrorMsg: (msg: string | null) => void;
   setCheers: React.Dispatch<React.SetStateAction<CheerItem[]>>;
 }
 
 function executeCheerSend(state: CheerSenderState, presetId: CheerPreset, body: string) {
-  const {
-    client,
-    sessionId,
-    pin,
-    senderName,
-    rateLimitSeconds,
-    setSubmitting,
-    setErrorMsg,
-    setCheers,
-  } = state;
+  const { client, sessionId, pin, senderName, rateLimitSeconds, setSubmitting, setErrorMsg } =
+    state;
   if (rateLimitSeconds > 0) return;
   if (!senderName.trim()) {
     setErrorMsg('Por favor, indica tu nombre para enviar un mensaje de ánimo.');
@@ -165,9 +151,7 @@ function executeCheerSend(state: CheerSenderState, presetId: CheerPreset, body: 
   setErrorMsg(null);
   setSubmitting(true);
   const res = sendCheerPacket({ client, sessionId, pin, senderName }, presetId, body);
-  if (res.success && res.item) {
-    setCheers((prev) => [res.item!, ...prev]);
-  } else {
+  if (!res.success) {
     setErrorMsg('No hay conexión con el servidor. Reconectando...');
   }
   setSubmitting(false);
@@ -197,17 +181,22 @@ function useCheerState(initialPin: string, initialSenderName: string, initialChe
   };
 }
 
-function useCheerSender(
-  client: WebSocketClient | null,
-  sessionId: string | undefined,
-  state: ReturnType<typeof useCheerState>,
-) {
+function useCheerSender(state: {
+  client: WebSocketClient | null;
+  sessionId?: string;
+  pin: string;
+  senderName: string;
+  rateLimitSeconds: number;
+  setIsSubmitting: (b: boolean) => void;
+  setErrorMsg: (msg: string | null) => void;
+  setCheers: React.Dispatch<React.SetStateAction<CheerItem[]>>;
+}) {
   return useCallback(
     async (presetId: CheerPreset, body: string) => {
       executeCheerSend(
         {
-          client,
-          sessionId,
+          client: state.client,
+          sessionId: state.sessionId,
           pin: state.pin,
           senderName: state.senderName,
           rateLimitSeconds: state.rateLimitSeconds,
@@ -220,8 +209,8 @@ function useCheerSender(
       );
     },
     [
-      client,
-      sessionId,
+      state.client,
+      state.sessionId,
       state.pin,
       state.senderName,
       state.rateLimitSeconds,
@@ -233,12 +222,12 @@ function useCheerSender(
 }
 
 export function useSpectatorCheer({
-  client,
+  client = null,
   sessionId,
   initialCheers = [],
   initialPin = '',
   initialSenderName = '',
-}: UseSpectatorCheerOptions) {
+}: UseSpectatorCheerOptions = {}) {
   const state = useCheerState(initialPin, initialSenderName, initialCheers);
 
   useRateLimitCountdown(state.rateLimitSeconds, state.setRateLimitSeconds);
@@ -250,7 +239,16 @@ export function useSpectatorCheer({
     setSubmitting: state.setIsSubmitting,
   });
 
-  const sendCheer = useCheerSender(client, sessionId, state);
+  const sendCheer = useCheerSender({
+    client,
+    sessionId,
+    pin: state.pin,
+    senderName: state.senderName,
+    rateLimitSeconds: state.rateLimitSeconds,
+    setIsSubmitting: state.setIsSubmitting,
+    setErrorMsg: state.setErrorMsg,
+    setCheers: state.setCheers,
+  });
 
   return {
     pin: state.pin,
