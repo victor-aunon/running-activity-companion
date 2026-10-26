@@ -112,7 +112,14 @@ export function useNowPlaying({ client, initialNowPlaying }: UseNowPlayingOption
   );
 
   useNowPlayingSocket(client, (pkt) => {
-    setNowPlaying(pkt);
+    setNowPlaying((prev) => {
+      const isStopped = pkt.playback.state === 'STOPPED' || pkt.playback.state === 'NONE';
+      const mergedTrack = isStopped ? null : (pkt.track ?? prev?.track ?? null);
+      return {
+        ...pkt,
+        track: mergedTrack,
+      };
+    });
     setCurrentPositionMs(pkt.playback.positionMs);
   });
 

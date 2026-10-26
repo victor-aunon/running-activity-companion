@@ -23,6 +23,16 @@ class SpotifyMediaSessionService(
 ) {
     private var spotifyReceiver: BroadcastReceiver? = null
 
+    // Cache metadata and state across separate broadcast intents
+    private var cachedTrackId: String? = null
+    private var cachedTitle: String? = null
+    private var cachedArtist: String? = null
+    private var cachedAlbum: String? = null
+    private var cachedDurationMs: Long = 0L
+    private var cachedSpotifyUrl: String? = null
+    private var isPlaying: Boolean = false
+    private var currentPositionMs: Long = 0L
+
     fun register() {
         try {
             val filter = IntentFilter().apply {
@@ -35,28 +45,59 @@ class SpotifyMediaSessionService(
                 override fun onReceive(context: Context, intent: Intent) {
                     try {
                         val action = intent.action ?: return
-                        val isPlaying = intent.getBooleanExtra("playing", false)
+
+                        when (action) {
+                            "com.spotify.music.metadatachanged" -> {
+                                val rawId = intent.getStringExtra("id")
+                                if (rawId != null) {
+                                    val cleanId = rawId.replace("spotify:track:", "")
+                                    cachedTrackId = cleanId
+                                    cachedSpotifyUrl = "https://open.spotify.com/track/$cleanId"
+                                }
+                                intent.getStringExtra("track")?.let { if (it.isNotBlank()) cachedTitle = it }
+                                intent.getStringExtra("artist")?.let { if (it.isNotBlank()) cachedArtist = it }
+                                intent.getStringExtra("album")?.let { if (it.isNotBlank()) cachedAlbum = it }
+
+                                val len = intent.getIntExtra("length", 0).toLong()
+                                if (len > 0) {
+                                    cachedDurationMs = if (len < 10000) len * 1000L else len
+                                }
+                            }
+                            "com.spotify.music.playbackstatechanged" -> {
+                                isPlaying = intent.getBooleanExtra("playing", isPlaying)
+                                val pos = intent.getIntExtra("playbackPosition", currentPositionMs.toInt()).toLong()
+                                currentPositionMs = pos
+
+                                // Fallback: check if metadata was also bundled in playbackstatechanged
+                                intent.getStringExtra("id")?.replace("spotify:track:", "")?.let {
+                                    if (it.isNotBlank()) {
+                                        cachedTrackId = it
+                                        cachedSpotifyUrl = "https://open.spotify.com/track/$it"
+                                    }
+                                }
+                                intent.getStringExtra("track")?.let { if (it.isNotBlank()) cachedTitle = it }
+                                intent.getStringExtra("artist")?.let { if (it.isNotBlank()) cachedArtist = it }
+                                intent.getStringExtra("album")?.let { if (it.isNotBlank()) cachedAlbum = it }
+                                val len = intent.getIntExtra("length", 0).toLong()
+                                if (len > 0) {
+                                    cachedDurationMs = if (len < 10000) len * 1000L else len
+                                }
+                            }
+                        }
+
                         val state = if (isPlaying) "PLAYING" else "PAUSED"
-                        val positionMs = intent.getIntExtra("playbackPosition", 0).toLong()
-                        val id = intent.getStringExtra("id")?.replace("spotify:track:", "")
-                        val track = intent.getStringExtra("track")
-                        val artist = intent.getStringExtra("artist")
-                        val album = intent.getStringExtra("album")
-                        val length = intent.getIntExtra("length", 0).toLong()
+                        Log.d(TAG, "Spotify state: $state (action: $action, track: $cachedTitle, artist: $cachedArtist, pos: $currentPositionMs)")
 
-                        val spotifyUrl = if (id != null) "https://open.spotify.com/track/$id" else null
-
-                        Log.d(TAG, "Spotify broadcast received: $action (playing=$isPlaying, track=$track)")
                         onPlaybackChanged(
                             state,
-                            positionMs,
-                            id,
-                            track,
-                            artist,
-                            album,
+                            currentPositionMs,
+                            cachedTrackId,
+                            cachedTitle,
+                            cachedArtist,
+                            cachedAlbum,
                             null,
-                            length,
-                            spotifyUrl
+                            cachedDurationMs,
+                            cachedSpotifyUrl
                         )
                     } catch (e: Exception) {
                         Log.e(TAG, "Error in spotify onReceive: ${e.message}")

@@ -21,13 +21,19 @@ interface LeafletInitParams {
   lat: number;
   lng: number;
   path: [number, number][];
+  onUserInteraction: () => void;
 }
 
 function initLeafletMap(L: any, params: LeafletInitParams) {
   const map = L.map(params.container, { zoomControl: false, attributionControl: false }).setView(
     [params.lat, params.lng],
-    15,
+    16,
   );
+
+  map.on('dragstart', () => {
+    params.onUserInteraction();
+  });
+
   const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
   });
@@ -59,6 +65,8 @@ interface LeafletHookParams {
   lng: number;
   path: [number, number][];
   isDegraded: boolean;
+  isFollowing: boolean;
+  onUserInteraction: () => void;
 }
 
 function switchMapLayer(map: any, streetLayer: any, satelliteLayer: any, enableSatellite: boolean) {
@@ -79,6 +87,9 @@ function updateLeafletEntities(
   inst.marker?.setLatLng([params.lat, params.lng]);
   if (!params.isDegraded) {
     inst.polyline?.setLatLngs(params.path);
+  }
+  if (params.isFollowing) {
+    inst.map?.panTo([params.lat, params.lng], { animate: true, duration: 0.8 });
   }
 }
 
@@ -123,6 +134,7 @@ function useLeafletInstance(params: LeafletHookParams) {
         lat: params.lat,
         lng: params.lng,
         path: params.path,
+        onUserInteraction: params.onUserInteraction,
       });
     });
     return () => {
@@ -134,7 +146,7 @@ function useLeafletInstance(params: LeafletHookParams) {
 
   useEffect(() => {
     updateLeafletEntities(instancesRef.current, params);
-  }, [params.lat, params.lng, params.path, params.isDegraded]);
+  }, [params.lat, params.lng, params.path, params.isDegraded, params.isFollowing]);
 
   return getMapControls(instancesRef, params);
 }
@@ -143,14 +155,50 @@ interface MapCardHeaderProps {
   routeName?: string;
   gpsQuality?: number;
   isSatellite: boolean;
+  isFollowing: boolean;
   onToggleSatellite: () => void;
   onCenterRunner: () => void;
+}
+
+function FollowRunnerButton({
+  isFollowing,
+  onCenterRunner,
+}: {
+  isFollowing: boolean;
+  onCenterRunner: () => void;
+}) {
+  if (isFollowing) {
+    return (
+      <button
+        type="button"
+        onClick={onCenterRunner}
+        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-xs font-bold text-white transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-200"
+        title="Siguiendo en vivo al corredor"
+      >
+        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+        <span>Siguiendo</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onCenterRunner}
+      className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 active:scale-95 text-xs font-bold text-white transition-all flex items-center gap-1.5 shadow-sm shadow-orange-200 animate-pulse"
+      title="Centrar y volver a seguir al corredor"
+    >
+      <Target className="w-3.5 h-3.5" />
+      <span>Centrar Runner</span>
+    </button>
+  );
 }
 
 function MapCardHeader({
   routeName,
   gpsQuality,
   isSatellite,
+  isFollowing,
   onToggleSatellite,
   onCenterRunner,
 }: MapCardHeaderProps) {
@@ -182,15 +230,7 @@ function MapCardHeader({
           <Layers className="w-3.5 h-3.5" />
           <span>{isSatellite ? 'Mapa' : 'Satélite'}</span>
         </button>
-        <button
-          type="button"
-          onClick={onCenterRunner}
-          className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 active:scale-95 text-xs font-bold text-white transition-all flex items-center gap-1 shadow-sm shadow-orange-200"
-          title="Centrar mapa en la posición del corredor"
-        >
-          <Target className="w-3.5 h-3.5" />
-          <span>Centrar Runner</span>
-        </button>
+        <FollowRunnerButton isFollowing={isFollowing} onCenterRunner={onCenterRunner} />
       </div>
     </div>
   );
@@ -234,10 +274,12 @@ function MapZoomControls({
   onZoomIn,
   onZoomOut,
   onCenterRunner,
+  isFollowing,
 }: {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onCenterRunner: () => void;
+  isFollowing: boolean;
 }) {
   return (
     <div className="absolute bottom-4 right-4 flex flex-col gap-1.5 z-[500]">
@@ -260,10 +302,12 @@ function MapZoomControls({
       <button
         type="button"
         onClick={onCenterRunner}
-        className="w-8 h-8 rounded-lg bg-white/90 hover:bg-white text-slate-800 shadow-md backdrop-blur-sm flex items-center justify-center transition-all active:scale-90"
+        className={`w-8 h-8 rounded-lg bg-white/90 hover:bg-white text-slate-800 shadow-md backdrop-blur-sm flex items-center justify-center transition-all active:scale-90 ${
+          !isFollowing ? 'ring-2 ring-orange-500 animate-pulse' : ''
+        }`}
         title="Centrar en corredor"
       >
-        <Compass className="w-4 h-4 text-orange-600" />
+        <Compass className={`w-4 h-4 ${isFollowing ? 'text-emerald-600' : 'text-orange-600'}`} />
       </button>
     </div>
   );
@@ -291,50 +335,95 @@ function ElevationFooter({ elevationProfileText }: { elevationProfileText?: stri
   );
 }
 
-export function MapTile({
-  currentLat = 40.4168,
-  currentLng = -3.7038,
-  gpsQuality = 0,
-  pathCoordinates = [],
+function MapViewport({
+  containerRef,
   elapsedSeconds,
   elevationM,
   eta,
-  routeName,
-  elevationProfileText,
-}: MapTileProps) {
-  const [isSatellite, setIsSatellite] = useState(false);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const isDegradedGps = gpsQuality === 0;
+  onZoomIn,
+  onZoomOut,
+  onCenterRunner,
+  isFollowing,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  elapsedSeconds?: number;
+  elevationM?: number;
+  eta?: string;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onCenterRunner: () => void;
+  isFollowing: boolean;
+}) {
+  return (
+    <div className="relative w-full h-[460px] lg:flex-1 lg:min-h-[460px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80">
+      <MapHudOverlay elapsedSeconds={elapsedSeconds} elevationM={elevationM} eta={eta} />
+      <MapZoomControls
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onCenterRunner={onCenterRunner}
+        isFollowing={isFollowing}
+      />
+      <div ref={containerRef} className="w-full h-full" />
+    </div>
+  );
+}
 
-  const { centerRunner, toggleSatellite, zoomIn, zoomOut } = useLeafletInstance({
-    containerRef: mapContainerRef,
-    lat: currentLat,
-    lng: currentLng,
-    path: pathCoordinates,
-    isDegraded: isDegradedGps,
+function useMapTileState(
+  props: MapTileProps,
+  containerRef: React.RefObject<HTMLDivElement | null>,
+) {
+  const [isSatellite, setIsSatellite] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(true);
+
+  const controls = useLeafletInstance({
+    containerRef,
+    lat: props.currentLat ?? 40.4168,
+    lng: props.currentLng ?? -3.7038,
+    path: props.pathCoordinates ?? [],
+    isDegraded: (props.gpsQuality ?? 0) === 0,
+    isFollowing,
+    onUserInteraction: () => setIsFollowing(false),
   });
+
+  const handleCenterRunner = () => {
+    setIsFollowing(true);
+    controls.centerRunner();
+  };
 
   const handleToggleSatellite = () => {
     const next = !isSatellite;
     setIsSatellite(next);
-    toggleSatellite(next);
+    controls.toggleSatellite(next);
   };
+
+  return { isSatellite, isFollowing, controls, handleCenterRunner, handleToggleSatellite };
+}
+
+export function MapTile(props: MapTileProps) {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const state = useMapTileState(props, mapContainerRef);
 
   return (
     <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4 flex flex-col h-full justify-between">
       <MapCardHeader
-        routeName={routeName}
-        gpsQuality={gpsQuality}
-        isSatellite={isSatellite}
-        onToggleSatellite={handleToggleSatellite}
-        onCenterRunner={centerRunner}
+        routeName={props.routeName}
+        gpsQuality={props.gpsQuality}
+        isSatellite={state.isSatellite}
+        isFollowing={state.isFollowing}
+        onToggleSatellite={state.handleToggleSatellite}
+        onCenterRunner={state.handleCenterRunner}
       />
-      <div className="relative w-full h-[460px] lg:flex-1 lg:min-h-[460px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80">
-        <MapHudOverlay elapsedSeconds={elapsedSeconds} elevationM={elevationM} eta={eta} />
-        <MapZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onCenterRunner={centerRunner} />
-        <div ref={mapContainerRef} className="w-full h-full" />
-      </div>
-      <ElevationFooter elevationProfileText={elevationProfileText} />
+      <MapViewport
+        containerRef={mapContainerRef}
+        elapsedSeconds={props.elapsedSeconds}
+        elevationM={props.elevationM}
+        eta={props.eta}
+        onZoomIn={state.controls.zoomIn}
+        onZoomOut={state.controls.zoomOut}
+        onCenterRunner={state.handleCenterRunner}
+        isFollowing={state.isFollowing}
+      />
+      <ElevationFooter elevationProfileText={props.elevationProfileText} />
     </div>
   );
 }
