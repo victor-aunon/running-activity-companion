@@ -17,6 +17,7 @@ export interface WebSocketClientOptions {
   token: string;
   role?: 'spectator' | 'gateway';
   clientId?: string;
+  pin?: string;
   heartbeatIntervalMs?: number;
   initialReconnectDelayMs?: number;
   maxReconnectDelayMs?: number;
@@ -39,6 +40,7 @@ export class WebSocketClient {
     this.options = {
       role: 'spectator',
       clientId: this.clientId,
+      pin: options.pin || '',
       heartbeatIntervalMs: 15000,
       initialReconnectDelayMs: 1000,
       maxReconnectDelayMs: 16000,
@@ -47,11 +49,7 @@ export class WebSocketClient {
     this.reconnectDelay = this.options.initialReconnectDelayMs;
   }
 
-  public connect(): void {
-    if (typeof window === 'undefined') return; // Browser only
-    this.explicitlyClosed = false;
-    this.setState('CONNECTING');
-
+  private disposeSocket(): void {
     if (this.ws) {
       try {
         this.ws.onclose = null;
@@ -62,14 +60,27 @@ export class WebSocketClient {
       }
       this.ws = null;
     }
+  }
 
+  private buildWsUrl(): string {
     const wsUrl = new URL(this.options.url, window.location.origin.replace(/^http/, 'ws'));
     wsUrl.searchParams.set('token', this.options.token);
     wsUrl.searchParams.set('role', this.options.role);
     wsUrl.searchParams.set('clientId', this.clientId);
+    if (this.options.pin) {
+      wsUrl.searchParams.set('pin', this.options.pin);
+    }
+    return wsUrl.toString();
+  }
+
+  public connect(): void {
+    if (typeof window === 'undefined') return; // Browser only
+    this.explicitlyClosed = false;
+    this.setState('CONNECTING');
+    this.disposeSocket();
 
     try {
-      this.ws = new WebSocket(wsUrl.toString());
+      this.ws = new WebSocket(this.buildWsUrl());
 
       this.ws.onopen = () => {
         this.setState('CONNECTED');
@@ -132,10 +143,7 @@ export class WebSocketClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    this.disposeSocket();
     this.setState('DISCONNECTED');
   }
 

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { WebSocketClient, type ConnectionState } from '../services/WebSocketClient';
+import { useEffect, useRef, useState } from 'react';
+import { WebSocketClient } from '../services/WebSocketClient';
+import type { ConnectionState } from '../services/WebSocketClient';
 import type {
   TelemetrySnapshotPacket,
   SessionStateChangedEvent,
@@ -8,6 +9,7 @@ import type {
 
 export interface UseLiveTelemetryOptions {
   token: string;
+  pin?: string;
   wsUrl?: string;
   initialTelemetry?: TelemetrySnapshotPacket | null;
   initialPathCoordinates?: [number, number][];
@@ -22,23 +24,25 @@ function resolveDefaultWsUrl(wsUrl?: string): string {
   return '/api/ws/session';
 }
 
-interface TelemetrySetters {
-  setTelemetry: React.Dispatch<React.SetStateAction<TelemetrySnapshotPacket | null>>;
+interface TelemetryState {
+  setTelemetry: (t: TelemetrySnapshotPacket) => void;
+  setSessionStatus: (s: string) => void;
+  setConnectionState: (c: ConnectionState) => void;
   setPathCoordinates: React.Dispatch<React.SetStateAction<[number, number][]>>;
   setElevationHistory: React.Dispatch<React.SetStateAction<number[]>>;
-  setSessionStatus: React.Dispatch<React.SetStateAction<string>>;
 }
 
-function handleDownlinkPacket(msg: WebSocketDownlinkMessage, setters: TelemetrySetters) {
+function handleDownlinkPacket(msg: WebSocketDownlinkMessage, state: TelemetryState) {
   if (msg.type === 'TELEMETRY_SNAPSHOT') {
-    setters.setTelemetry(msg);
-    if (msg.coordinates && msg.coordinates.gpsQuality > 0) {
-      setters.setPathCoordinates((prev) => [...prev, [msg.coordinates.lat, msg.coordinates.lng]]);
-      setters.setElevationHistory((prev) => [...prev.slice(-300), msg.coordinates.elevationM]);
+    const snap = msg as TelemetrySnapshotPacket;
+    state.setTelemetry(snap);
+    if (snap.coordinates?.lat && snap.coordinates?.lng) {
+      state.setPathCoordinates((prev) => [...prev, [snap.coordinates.lat, snap.coordinates.lng]]);
+      state.setElevationHistory((prev) => [...prev, snap.coordinates.elevationM]);
     }
   } else if (msg.type === 'SESSION_STATE_CHANGED') {
-    const event = msg as SessionStateChangedEvent;
-    setters.setSessionStatus(event.status);
+    const stateMsg = msg as SessionStateChangedEvent;
+    state.setSessionStatus(stateMsg.status);
   }
 }
 
@@ -48,7 +52,7 @@ function useTelemetryState(
 ) {
   const [telemetry, setTelemetry] = useState<TelemetrySnapshotPacket | null>(initialTelemetry);
   const [sessionStatus, setSessionStatus] = useState<string>('ACTIVE');
-  const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED');
+  const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
   const [pathCoordinates, setPathCoordinates] = useState<[number, number][]>(initialPath);
   const [elevationHistory, setElevationHistory] = useState<number[]>(
     initialTelemetry?.coordinates ? [initialTelemetry.coordinates.elevationM] : [],
@@ -69,6 +73,7 @@ function useTelemetryState(
 
 export function useLiveTelemetry({
   token,
+  pin,
   wsUrl,
   initialTelemetry = null,
   initialPathCoordinates = [],
@@ -80,7 +85,7 @@ export function useLiveTelemetry({
     if (!token) return;
 
     const url = resolveDefaultWsUrl(wsUrl);
-    const client = new WebSocketClient({ url, token, role: 'spectator' });
+    const client = new WebSocketClient({ url, token, role: 'spectator', pin });
     clientRef.current = client;
 
     const unsubscribeState = client.onStateChange((s) => state.setConnectionState(s));
@@ -93,7 +98,7 @@ export function useLiveTelemetry({
       unsubscribeMsg();
       client.disconnect();
     };
-  }, [token, wsUrl]);
+  }, [token, pin, wsUrl]);
 
   return {
     telemetry: state.telemetry,

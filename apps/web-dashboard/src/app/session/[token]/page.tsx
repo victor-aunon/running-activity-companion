@@ -499,6 +499,7 @@ function SessionDashboardInner({ token }: { token: string }) {
 
   const { telemetry, sessionStatus, pathCoordinates, elevationHistory, client } = useLiveTelemetry({
     token,
+    pin: init.initialPin,
     initialTelemetry: init.initialTelemetry,
     initialPathCoordinates: init.initialPath,
   });

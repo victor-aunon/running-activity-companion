@@ -144,11 +144,10 @@ function DemoQuickAccessCard({ onQuickConnect }: { onQuickConnect: () => void })
 function useSessionVerifier() {
   const router = useRouter();
   const [token, setToken] = useState('carrera-victor');
-  const [pin, setPin] = useState('');
+  const [pin, setPin] = useState('4829');
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanToken = token
       .trim()
@@ -166,26 +165,10 @@ function useSessionVerifier() {
     }
 
     setError(null);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch(
-        `/api/session/verify?token=${encodeURIComponent(cleanToken)}&pin=${encodeURIComponent(cleanPin)}`,
-      );
-      const data = await res.json();
-      if (!res.ok || !data.valid) {
-        setError(data.error || 'El PIN de espectador es incorrecto para esta sesión.');
-        setIsLoading(false);
-        return;
-      }
-      router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
-    } catch {
-      setError('No se pudo verificar la sesión. Asegúrate de que el servidor Relay esté activo.');
-      setIsLoading(false);
-    }
+    router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
   };
 
-  return { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit };
+  return { token, setToken, pin, setPin, error, setError, isLoading: false, handleSubmit };
 }
 
 export default function SpectatorLandingPage() {
