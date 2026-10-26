@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type {
   NowPlayingUpdatePacket,
   RunnerPlaybackStatus,
+  RunnerTrackInfo,
 } from '@running-support/shared-contracts';
 import { isNowPlayingUpdatePacket } from '@running-support/shared-contracts';
 import type { WebSocketClient } from '../services/WebSocketClient';
@@ -50,6 +51,39 @@ export function shouldAutoTransitionToIdle(
   return now - pausedAt >= 60000;
 }
 
+function normalizeTrack(rawTrack: any): RunnerTrackInfo | null {
+  if (!rawTrack || typeof rawTrack !== 'object') return null;
+  const trackId = String(rawTrack.trackId || 'unknown');
+  return {
+    trackId,
+    title: String(rawTrack.title || 'Pista'),
+    artist: String(rawTrack.artist || 'Artista'),
+    album: rawTrack.album ? String(rawTrack.album) : undefined,
+    artworkUrl: rawTrack.artworkUrl ? String(rawTrack.artworkUrl) : undefined,
+    durationMs: Number(rawTrack.durationMs || 0),
+    spotifyUrl: String(rawTrack.spotifyUrl || `https://open.spotify.com/track/${trackId}`),
+  };
+}
+
+function normalizePlayback(rawPlayback: any): RunnerPlaybackStatus {
+  return {
+    state: rawPlayback?.state || 'NONE',
+    positionMs: Number(rawPlayback?.positionMs || 0),
+    capturedAt: Number(rawPlayback?.capturedAt || Date.now()),
+    isLiveSync: Boolean(rawPlayback?.isLiveSync),
+  };
+}
+
+function normalizeNowPlayingPacket(raw: Record<string, any>): NowPlayingUpdatePacket {
+  return {
+    type: 'NOW_PLAYING_UPDATE',
+    sessionId: String(raw.sessionId || ''),
+    timestamp: Number(raw.timestamp || Date.now()),
+    playback: normalizePlayback(raw.playback),
+    track: normalizeTrack(raw.track),
+  };
+}
+
 function useNowPlayingSocket(
   client: WebSocketClient | null | undefined,
   onPacket: (pkt: NowPlayingUpdatePacket) => void,
@@ -62,6 +96,8 @@ function useNowPlayingSocket(
     const unsubscribe = client.onMessage((msg) => {
       if (isNowPlayingUpdatePacket(msg)) {
         handlerRef.current(msg);
+      } else if (msg && typeof msg === 'object' && (msg as any).type === 'NOW_PLAYING_UPDATE') {
+        handlerRef.current(normalizeNowPlayingPacket(msg as Record<string, any>));
       }
     });
     return () => unsubscribe();

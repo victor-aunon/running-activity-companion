@@ -138,6 +138,12 @@ export interface NowPlayingUpdatePacket {
   track: RunnerTrackInfo | null;
 }
 
+export interface PathHistoryPacket {
+  type: 'PATH_HISTORY';
+  sessionId: string;
+  coordinates: [number, number][];
+}
+
 export type WebSocketUplinkMessage =
   | TelemetrySnapshotPacket
   | SessionStateChangedEvent
@@ -149,6 +155,7 @@ export type WebSocketUplinkMessage =
 
 export type WebSocketDownlinkMessage =
   | TelemetrySnapshotPacket
+  | PathHistoryPacket
   | DispatchCheerCommand
   | CheerStatusEvent
   | SessionStateChangedEvent

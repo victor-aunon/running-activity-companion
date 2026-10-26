@@ -4,6 +4,7 @@ import React, { Suspense, use, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLiveTelemetry } from '../../../hooks/useLiveTelemetry';
 import { useEffortZones } from '../../../hooks/useEffortZones';
+import { useGpsLocality } from '../../../hooks/useGpsLocality';
 import { HeaderTile } from '../../../components/bento/HeaderTile';
 import { MetricTile, formatPace, formatDistanceKm } from '../../../components/bento/MetricTile';
 import {
@@ -370,6 +371,7 @@ interface DashboardLayoutProps {
   pathCoordinates: [number, number][];
   spectator: ReturnType<typeof useSpectatorCheer>;
   nowPlaying: ReturnType<typeof useNowPlaying>;
+  gpsLocality?: string;
   config?: FixtureConfig;
   elevationText?: string;
   eta?: string;
@@ -383,15 +385,18 @@ interface DashboardLayoutProps {
 function DashboardHeader({
   cfg,
   vm,
+  gpsLocality,
   displayPin,
   onRefresh,
 }: {
   cfg: Partial<FixtureConfig>;
   vm: ReturnType<typeof extractViewMetrics>;
+  gpsLocality?: string;
   displayPin?: string;
   onRefresh?: () => void;
 }) {
-  const resolvedLocality = cfg.locality || process.env.NEXT_PUBLIC_DEFAULT_LOCALITY || '--';
+  const resolvedLocality =
+    cfg.locality || gpsLocality || process.env.NEXT_PUBLIC_DEFAULT_LOCALITY || 'Madrid, España';
 
   return (
     <HeaderTile
@@ -407,47 +412,50 @@ function DashboardHeader({
   );
 }
 
-function DashboardLayout({
-  vm,
-  resolveZone,
-  pathCoordinates,
-  spectator,
-  nowPlaying,
-  config,
-  elevationText,
-  eta,
-  isCompleted,
-  isDismissed,
-  onDismiss,
-  onRefresh,
-  displayPin,
-}: DashboardLayoutProps) {
+function DashboardBody(props: DashboardLayoutProps) {
+  const { vm, resolveZone, pathCoordinates, spectator, nowPlaying, config, elevationText, eta } =
+    props;
+  const cfg: Partial<FixtureConfig> = config || {};
+  return (
+    <MainDashboardContent
+      vm={vm}
+      resolveZone={resolveZone}
+      pathCoordinates={pathCoordinates}
+      spectator={spectator}
+      nowPlaying={nowPlaying}
+      targetDistanceKm={21.1}
+      targetPaceSecPerKm={267}
+      maxHeartRateBpm={174}
+      routeName={cfg.routeName}
+      elevationText={elevationText || cfg.elevationProfileText}
+      eta={eta || cfg.eta}
+      spectatorCount={cfg.spectatorCount}
+      athleteName={cfg.athleteName}
+    />
+  );
+}
+
+function DashboardLayout(props: DashboardLayoutProps) {
+  const { vm, isCompleted, isDismissed, onDismiss, onRefresh, displayPin, gpsLocality, config } =
+    props;
   const cfg: Partial<FixtureConfig> = config || {};
   return (
     <main className="min-h-screen bg-slate-50/70 text-slate-800 relative selection:bg-indigo-100 selection:text-indigo-900 py-6">
       <AuroraGlowOrbs />
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <DashboardHeader cfg={cfg} vm={vm} displayPin={displayPin} onRefresh={onRefresh} />
-        <MainDashboardContent
+        <DashboardHeader
+          cfg={cfg}
           vm={vm}
-          resolveZone={resolveZone}
-          pathCoordinates={pathCoordinates}
-          spectator={spectator}
-          nowPlaying={nowPlaying}
-          targetDistanceKm={21.1}
-          targetPaceSecPerKm={267}
-          maxHeartRateBpm={174}
-          routeName={cfg.routeName}
-          elevationText={elevationText || cfg.elevationProfileText}
-          eta={eta || cfg.eta}
-          spectatorCount={cfg.spectatorCount}
-          athleteName={cfg.athleteName}
+          gpsLocality={gpsLocality}
+          displayPin={displayPin}
+          onRefresh={onRefresh}
         />
+        <DashboardBody {...props} />
         <SessionSummaryModal
           isOpen={isCompleted && !isDismissed}
           onClose={onDismiss}
           metrics={vm.metrics}
-          totalCheersReceived={spectator.cheers.length}
+          totalCheersReceived={props.spectator.cheers.length}
         />
       </div>
     </main>
@@ -492,12 +500,12 @@ function resolveInitialNowPlaying(
   return mockFixture?.nowPlaying ?? null;
 }
 
-function SessionDashboardInner({ token }: { token: string }) {
+function useDashboardSession(token: string) {
   const searchParams = useSearchParams();
   const mockFixture = getInitialFixture(searchParams);
   const init = resolveInnerDashboardParams(mockFixture, searchParams.get('pin'));
 
-  const { telemetry, sessionStatus, pathCoordinates, elevationHistory, client } = useLiveTelemetry({
+  const telemetry = useLiveTelemetry({
     token,
     pin: init.initialPin,
     initialTelemetry: init.initialTelemetry,
@@ -507,42 +515,61 @@ function SessionDashboardInner({ token }: { token: string }) {
   const [isDismissed, setIsDismissed] = useState(false);
 
   const spectator = useSpectatorCheer({
-    client,
-    sessionId: telemetry ? telemetry.sessionId : token,
+    client: telemetry.client,
+    sessionId: telemetry.telemetry ? telemetry.telemetry.sessionId : token,
     initialCheers: init.initialCheers,
     initialPin: init.initialPin,
   });
 
-  const vm = extractViewMetrics(telemetry, sessionStatus);
-  const live = resolveLiveMetrics(mockFixture, vm, elevationHistory);
+  const vm = extractViewMetrics(telemetry.telemetry, telemetry.sessionStatus);
+  const live = resolveLiveMetrics(mockFixture, vm, telemetry.elevationHistory);
+  const gpsLocality = useGpsLocality(vm.lat, vm.lng);
   const nowPlaying = useNowPlaying({
-    client,
+    client: telemetry.client,
     initialNowPlaying: resolveInitialNowPlaying(searchParams, mockFixture),
   });
 
-  const activePin = spectator.pin || init.initialPin || init.fallbackPin;
-  const onRefresh = client
+  return {
+    vm,
+    resolveZone,
+    pathCoordinates: telemetry.pathCoordinates,
+    spectator,
+    nowPlaying,
+    gpsLocality,
+    mockFixture,
+    live,
+    isDismissed,
+    setIsDismissed,
+    activePin: spectator.pin || init.initialPin || init.fallbackPin,
+    client: telemetry.client,
+  };
+}
+
+function SessionDashboardInner({ token }: { token: string }) {
+  const session = useDashboardSession(token);
+  const onRefresh = session.client
     ? () => {
-        client.disconnect();
-        client.connect();
+        session.client?.disconnect();
+        session.client?.connect();
       }
     : undefined;
 
   return (
     <DashboardLayout
-      vm={vm}
-      resolveZone={resolveZone}
-      pathCoordinates={pathCoordinates}
-      spectator={spectator}
-      nowPlaying={nowPlaying}
-      config={mockFixture ? mockFixture.config : undefined}
-      elevationText={live.elevationText}
-      eta={live.eta}
-      isCompleted={vm.isCompleted}
-      isDismissed={isDismissed}
-      onDismiss={() => setIsDismissed(true)}
+      vm={session.vm}
+      resolveZone={session.resolveZone}
+      pathCoordinates={session.pathCoordinates}
+      spectator={session.spectator}
+      nowPlaying={session.nowPlaying}
+      gpsLocality={session.gpsLocality}
+      config={session.mockFixture ? session.mockFixture.config : undefined}
+      elevationText={session.live.elevationText}
+      eta={session.live.eta}
+      isCompleted={session.vm.isCompleted}
+      isDismissed={session.isDismissed}
+      onDismiss={() => session.setIsDismissed(true)}
       onRefresh={onRefresh}
-      displayPin={activePin}
+      displayPin={session.activePin}
     />
   );
 }

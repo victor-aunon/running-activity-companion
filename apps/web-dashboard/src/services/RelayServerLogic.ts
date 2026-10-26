@@ -12,6 +12,7 @@ interface RoomSession {
   lastNowPlaying?: unknown;
   hasLoggedFirstTelemetry?: boolean;
   verbose?: boolean;
+  pathHistory: [number, number][];
 }
 
 interface RateLimitTracker {
@@ -142,22 +143,34 @@ function handleDispatchCheer(
   );
 }
 
-function handleTelemetrySnapshot(room: RoomSession, msg: any) {
-  room.lastTelemetry = msg;
-  const metrics = msg.metrics || {};
-  const hr = metrics.heartRateBpm ?? '--';
-  const speed = metrics.speedMps != null ? Number(metrics.speedMps).toFixed(1) : '--';
+function appendPathHistory(room: RoomSession, coords: any) {
+  if (!coords?.lat || !coords?.lng) return;
+  room.pathHistory.push([coords.lat, coords.lng]);
+  if (room.pathHistory.length > 5000) {
+    room.pathHistory.shift();
+  }
+}
+
+function logTelemetryStats(room: RoomSession, seq: any, metrics: any) {
+  const hr = metrics?.heartRateBpm ?? '--';
+  const speed = metrics?.speedMps != null ? Number(metrics.speedMps).toFixed(1) : '--';
 
   if (!room.hasLoggedFirstTelemetry) {
     room.hasLoggedFirstTelemetry = true;
     console.log(
-      `🚀 [RELAY] Primer paquete de telemetría recibido en "${room.token}" (#${msg.seq || 1}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
+      `🚀 [RELAY] Primer paquete de telemetría recibido en "${room.token}" (#${seq || 1}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
     );
   } else if (room.verbose) {
     console.log(
-      `🏃 [RELAY] Telemetría en "${room.token}" (#${msg.seq || '?'}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
+      `🏃 [RELAY] Telemetría en "${room.token}" (#${seq || '?'}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
     );
   }
+}
+
+function handleTelemetrySnapshot(room: RoomSession, msg: any) {
+  room.lastTelemetry = msg;
+  appendPathHistory(room, msg.coordinates);
+  logTelemetryStats(room, msg.seq, msg.metrics);
   broadcastToSpectators(room, JSON.stringify(msg));
 }
 
@@ -251,6 +264,15 @@ function registerSpectatorConnection(
   console.log(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
+  if (room.pathHistory.length > 0) {
+    ws.send(
+      JSON.stringify({
+        type: 'PATH_HISTORY',
+        sessionId: room.sessionId || room.token,
+        coordinates: room.pathHistory,
+      }),
+    );
+  }
   if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
   if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
 }
@@ -320,7 +342,7 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     const token = rawToken.trim().toLowerCase();
     let room = rooms.get(token);
     if (!room) {
-      room = { token, gatewayWs: null, spectators: new Map(), verbose };
+      room = { token, gatewayWs: null, spectators: new Map(), verbose, pathHistory: [] };
       rooms.set(token, room);
     }
     return room;

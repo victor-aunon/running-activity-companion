@@ -122,15 +122,17 @@ class WebSocketGatewayClient(
                 put("isLiveSync", true)
             }
             put("playback", playbackObj)
-            if (trackId != null && title != null && artist != null) {
+            if (title != null && artist != null && title.isNotBlank() && artist.isNotBlank()) {
+                val effectiveId = trackId?.ifBlank { null } ?: "track-${Math.abs((title + artist).hashCode())}"
+                val effectiveUrl = spotifyUrl?.ifBlank { null } ?: "https://open.spotify.com/track/$effectiveId"
                 val trackObj = JSONObject().apply {
-                    put("trackId", trackId)
+                    put("trackId", effectiveId)
                     put("title", title)
                     put("artist", artist)
                     if (album != null) put("album", album)
                     if (artworkUrl != null) put("artworkUrl", artworkUrl)
                     put("durationMs", durationMs ?: 0L)
-                    put("spotifyUrl", spotifyUrl ?: "https://open.spotify.com/track/$trackId")
+                    put("spotifyUrl", effectiveUrl)
                 }
                 put("track", trackObj)
             } else {

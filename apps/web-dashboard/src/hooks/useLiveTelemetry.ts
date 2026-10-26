@@ -4,6 +4,7 @@ import type { ConnectionState } from '../services/WebSocketClient';
 import type {
   TelemetrySnapshotPacket,
   SessionStateChangedEvent,
+  PathHistoryPacket,
   WebSocketDownlinkMessage,
 } from '@running-support/shared-contracts';
 
@@ -39,6 +40,11 @@ function handleDownlinkPacket(msg: WebSocketDownlinkMessage, state: TelemetrySta
     if (snap.coordinates?.lat && snap.coordinates?.lng) {
       state.setPathCoordinates((prev) => [...prev, [snap.coordinates.lat, snap.coordinates.lng]]);
       state.setElevationHistory((prev) => [...prev, snap.coordinates.elevationM]);
+    }
+  } else if (msg.type === 'PATH_HISTORY') {
+    const history = msg as PathHistoryPacket;
+    if (Array.isArray(history.coordinates) && history.coordinates.length > 0) {
+      state.setPathCoordinates(history.coordinates);
     }
   } else if (msg.type === 'SESSION_STATE_CHANGED') {
     const stateMsg = msg as SessionStateChangedEvent;
