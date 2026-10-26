@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -47,33 +48,42 @@ class RunningActivityService : Service() {
         val isSimulation = intent?.getBooleanExtra(EXTRA_SIMULATION_MODE, false) ?: false
         activeSessionId = sessionId
 
-        gatewayClient = WebSocketGatewayClient(serverUrl, token, sessionId, pin, serviceScope)
-        gatewayClient?.connect()
+        if (gatewayClient == null) {
+            val client = WebSocketGatewayClient(serverUrl, token, sessionId, pin, serviceScope)
+            gatewayClient = client
+            client.connect()
 
-        // Track cloud connection state
-        serviceScope.launch {
-            gatewayClient?.connectionState?.collect { connected ->
-                _isCloudConnectedState.value = connected
+            serviceScope.launch {
+                client.connectionState.collect { connected ->
+                    _isCloudConnectedState.value = connected
+                }
             }
+
+            garminManager?.setTelemetryListener { snapshot ->
+                client.send(snapshot)
+            }
+
+            setupSpotify(sessionId)
+            setupCheersListener(sessionId)
         }
 
-        // Forward telemetry from Garmin (or simulation) to WebSocket gateway
-        garminManager?.setTelemetryListener { snapshot ->
-            gatewayClient?.send(snapshot)
-        }
-
-        // Configure simulation mode
+        // Configure simulation mode dynamically
         garminManager?.setSimulationMode(isSimulation, sessionId)
         _isGarminConnectedState.value = isSimulation
         _isServiceRunningState.value = true
 
+        return START_STICKY
+    }
+
+    private fun setupSpotify(sessionId: String) {
         spotifyManager = SpotifyMediaSessionService(this) { state, pos, id, title, artist, album, art, dur, url ->
             val sId = activeSessionId ?: sessionId
             gatewayClient?.sendNowPlayingUpdate(sId, state, pos, id, title, artist, album, art, dur, url)
         }
         spotifyManager?.register()
+    }
 
-        // Listen for cheers from Web and forward to Garmin Data Field
+    private fun setupCheersListener(sessionId: String) {
         serviceScope.launch {
             gatewayClient?.incomingCheers?.collect { cheerJson ->
                 val notifId = cheerJson.optString("notificationId")
@@ -96,7 +106,6 @@ class RunningActivityService : Service() {
                 db.cheerDao().insertCheer(cheer)
                 Log.i(TAG, "Forwarding cheer to Garmin Data Field: $body")
 
-                // Forward via BLE to watch and only notify server upon delivery
                 garminManager?.transmitCheerToWatch(cheerJson) { delivered ->
                     if (delivered) {
                         serviceScope.launch {
@@ -113,8 +122,6 @@ class RunningActivityService : Service() {
                 }
             }
         }
-
-        return START_STICKY
     }
 
     fun onSessionCompleted() {
@@ -147,11 +154,29 @@ class RunningActivityService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Running Support Gateway")
             .setContentText("Transmitiendo telemetría en tiempo real")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        startForeground(101, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    101,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(101, notification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in startForeground with type: ${e.message}", e)
+            try {
+                startForeground(101, notification)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback startForeground error: ${e2.message}", e2)
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -160,11 +185,16 @@ class RunningActivityService : Service() {
         spotifyManager?.unregister()
         spotifyManager = null
         gatewayClient?.disconnect()
+        gatewayClient = null
         _isServiceRunningState.value = false
         _isCloudConnectedState.value = false
         _isGarminConnectedState.value = false
         if (wakeLock?.isHeld == true) {
-            wakeLock?.release()
+            try {
+                wakeLock?.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error releasing WakeLock: ${e.message}")
+            }
         }
         super.onDestroy()
     }
@@ -172,12 +202,16 @@ class RunningActivityService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun acquireWakeLock() {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "RunningSupport:GatewayWakeLock"
-        ).apply {
-            acquire(4 * 60 * 60 * 1000L) // 4 hours maximum timeout
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "RunningSupport:GatewayWakeLock"
+            ).apply {
+                acquire(4 * 60 * 60 * 1000L) // 4 hours maximum timeout
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error acquiring WakeLock: ${e.message}")
         }
     }
 

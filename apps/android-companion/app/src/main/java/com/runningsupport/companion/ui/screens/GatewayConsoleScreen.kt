@@ -116,7 +116,6 @@ fun GatewayConsoleScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = isSimulationMode,
-                        enabled = !isServiceRunning,
                         onCheckedChange = onToggleSimulationMode
                     )
                 }

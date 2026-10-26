@@ -117,6 +117,9 @@ class MainActivity : ComponentActivity() {
                 },
                 onToggleSimulationMode = { enabled ->
                     isSimulationMode = enabled
+                    if (isServiceRunning) {
+                        startTrackingService(session, serverUrl, enabled)
+                    }
                 },
                 onToggleService = { enabled ->
                     if (enabled) {

@@ -24,45 +24,53 @@ class SpotifyMediaSessionService(
     private var spotifyReceiver: BroadcastReceiver? = null
 
     fun register() {
-        val filter = IntentFilter().apply {
-            addAction("com.spotify.music.metadatachanged")
-            addAction("com.spotify.music.playbackstatechanged")
-            addAction("com.spotify.music.queuechanged")
-        }
-
-        spotifyReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val action = intent.action ?: return
-                val isPlaying = intent.getBooleanExtra("playing", false)
-                val state = if (isPlaying) "PLAYING" else "PAUSED"
-                val positionMs = intent.getIntExtra("playbackPosition", 0).toLong()
-                val id = intent.getStringExtra("id")?.replace("spotify:track:", "")
-                val track = intent.getStringExtra("track")
-                val artist = intent.getStringExtra("artist")
-                val album = intent.getStringExtra("album")
-                val length = intent.getIntExtra("length", 0).toLong()
-
-                val spotifyUrl = if (id != null) "https://open.spotify.com/track/$id" else null
-
-                Log.d(TAG, "Spotify broadcast received: $action (playing=$isPlaying, track=$track)")
-                onPlaybackChanged(
-                    state,
-                    positionMs,
-                    id,
-                    track,
-                    artist,
-                    album,
-                    null,
-                    length,
-                    spotifyUrl
-                )
+        try {
+            val filter = IntentFilter().apply {
+                addAction("com.spotify.music.metadatachanged")
+                addAction("com.spotify.music.playbackstatechanged")
+                addAction("com.spotify.music.queuechanged")
             }
-        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(spotifyReceiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(spotifyReceiver, filter)
+            spotifyReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    try {
+                        val action = intent.action ?: return
+                        val isPlaying = intent.getBooleanExtra("playing", false)
+                        val state = if (isPlaying) "PLAYING" else "PAUSED"
+                        val positionMs = intent.getIntExtra("playbackPosition", 0).toLong()
+                        val id = intent.getStringExtra("id")?.replace("spotify:track:", "")
+                        val track = intent.getStringExtra("track")
+                        val artist = intent.getStringExtra("artist")
+                        val album = intent.getStringExtra("album")
+                        val length = intent.getIntExtra("length", 0).toLong()
+
+                        val spotifyUrl = if (id != null) "https://open.spotify.com/track/$id" else null
+
+                        Log.d(TAG, "Spotify broadcast received: $action (playing=$isPlaying, track=$track)")
+                        onPlaybackChanged(
+                            state,
+                            positionMs,
+                            id,
+                            track,
+                            artist,
+                            album,
+                            null,
+                            length,
+                            spotifyUrl
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in spotify onReceive: ${e.message}")
+                    }
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(spotifyReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.registerReceiver(spotifyReceiver, filter)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register Spotify receiver: ${e.message}")
         }
     }
 
