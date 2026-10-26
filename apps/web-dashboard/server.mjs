@@ -19,7 +19,7 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true });
-createRelayServer(wss);
+const relay = createRelayServer(wss);
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = parse(req.url || '');
@@ -36,10 +36,34 @@ server.listen(port, hostname, () => {
   console.log(`📡 WebSocket Relay: ws://${hostname}:${port}/api/ws/session\n`);
 });
 
-process.on('SIGTERM', () => {
-  server.close(() => process.exit(0));
-});
+function handleShutdown(signal) {
+  console.log(
+    `\n🛑 [UNIFIED SERVER] Recibida señal ${signal}. Cerrando servidor de forma segura...`,
+  );
+  try {
+    relay.close();
+    wss.clients.forEach((client) => {
+      try {
+        client.terminate();
+      } catch {
+        // Ignorar
+      }
+    });
+    wss.close();
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+    server.close(() => {
+      process.exit(0);
+    });
+  } catch {
+    process.exit(0);
+  }
 
-process.on('SIGINT', () => {
-  server.close(() => process.exit(0));
-});
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000).unref();
+}
+
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));

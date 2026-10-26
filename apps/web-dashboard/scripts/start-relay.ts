@@ -38,8 +38,32 @@ server.listen(PORT, () => {
   console.log('👉 In another terminal, run: pnpm --filter web-dashboard simulate:runner\n');
 });
 
-process.on('SIGINT', () => {
-  relay.close();
-  wss.close();
-  server.close(() => process.exit(0));
-});
+function handleShutdown(signal: string) {
+  console.log(`\n🛑 [RELAY] Recibida señal ${signal}. Cerrando servidor de forma segura...`);
+  try {
+    relay.close();
+    wss.clients.forEach((client) => {
+      try {
+        client.terminate();
+      } catch {
+        // Ignorar sockets ya cerrados
+      }
+    });
+    wss.close();
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+    server.close(() => {
+      process.exit(0);
+    });
+  } catch {
+    process.exit(0);
+  }
+
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000).unref();
+}
+
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
