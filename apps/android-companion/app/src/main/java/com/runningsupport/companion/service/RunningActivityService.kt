@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.runningsupport.companion.data.AppDatabase
 import com.runningsupport.companion.data.entities.CheerEntity
+import com.runningsupport.companion.garmin.GarminDataFieldManager
 import com.runningsupport.companion.network.WebSocketGatewayClient
 import kotlinx.coroutines.*
 import org.json.JSONObject

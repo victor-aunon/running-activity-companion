@@ -16,6 +16,9 @@ interface TelemetryBufferDao {
     @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND synced = 0 ORDER BY seq ASC LIMIT :limit")
     suspend fun getUnsyncedPackets(sessionId: String, limit: Int = 50): List<TelemetryEntity>
 
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND synced = 0 ORDER BY seq ASC LIMIT :limit")
+    suspend fun getUnsyncedTelemetry(sessionId: String, limit: Int = 50): List<TelemetryEntity>
+
     @Query("UPDATE telemetry_buffer SET synced = 1 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<Long>)
 

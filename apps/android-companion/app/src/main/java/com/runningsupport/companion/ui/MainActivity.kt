@@ -98,10 +98,7 @@ class MainActivity : ComponentActivity() {
 
             // Monitor buffer count from Room
             LaunchedEffect(session.sessionId) {
-                db.telemetryBufferDao().getUnsyncedTelemetry(session.sessionId, 1000)
-                    .let {
-                        pendingBufferCount = it.size
-                    }
+                pendingBufferCount = db.telemetryBufferDao().getUnsyncedCount(session.sessionId)
             }
 
             GatewayConsoleScreen(
