@@ -31,6 +31,7 @@ fun GatewayConsoleScreen(
     sessionName: String,
     serverUrl: String,
     onSessionNameChange: (String) -> Unit,
+    onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
     onToggleSimulationMode: (Boolean) -> Unit,
     onToggleService: (Boolean) -> Unit
@@ -168,19 +169,26 @@ fun GatewayConsoleScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "PIN DE ACCESO ESPECTADORES",
+                        text = "PIN DE ACCESO ESPECTADORES (4 DÍGITOS)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF64748B),
                         letterSpacing = 1.sp
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = spectatorPin,
+                        onValueChange = onSpectatorPinChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("4829") }
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = spectatorPin,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFEA580C)
+                        text = "💡 Los espectadores deben introducir este PIN exacto para conectar",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
                     )
                 }
             }

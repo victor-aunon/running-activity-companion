@@ -27,25 +27,22 @@ data class ActiveSessionState(
 class SessionManager(private val context: Context) {
     private var currentSession: ActiveSessionState? = null
 
-    fun getOrCreateSession(customToken: String = "carrera-victor"): ActiveSessionState {
-        val now = System.currentTimeMillis()
+    fun getOrCreateSession(
+        customToken: String = "carrera-victor",
+        customPin: String = "4829"
+    ): ActiveSessionState {
         val last = currentSession
         val tokenToUse = customToken.trim().ifEmpty { "carrera-victor" }
+        val pinToUse = customPin.trim().ifEmpty { "4829" }
 
-        if (last != null && last.token == tokenToUse && last.lastActivityEndTime != null) {
-            val elapsed = now - last.lastActivityEndTime
-            if (elapsed <= REASSOCIATION_WINDOW_MS) {
-                // Reassociate workout session within 3 minutes
-                currentSession = last.copy(lastActivityEndTime = null)
-                return currentSession!!
-            }
+        if (last != null && last.token == tokenToUse && last.spectatorPin == pinToUse) {
+            return last
         }
 
-        val pin = (1000..9999).random().toString()
         val freshSession = ActiveSessionState(
             sessionId = tokenToUse,
             token = tokenToUse,
-            spectatorPin = pin
+            spectatorPin = pinToUse
         )
         currentSession = freshSession
         return freshSession
@@ -93,8 +90,15 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            var session by remember { mutableStateOf(sessionManager.getOrCreateSession(sessionName)) }
-            var spectatorPin by remember { mutableStateOf(session.spectatorPin) }
+            var spectatorPin by remember {
+                mutableStateOf(
+                    prefs.getString(KEY_SPECTATOR_PIN, "4829") ?: "4829"
+                )
+            }
+
+            var session by remember {
+                mutableStateOf(sessionManager.getOrCreateSession(sessionName, spectatorPin))
+            }
 
             val savedUrl = prefs.getString(KEY_SERVER_URL, null)
             val initialUrl = if (savedUrl != null && !savedUrl.contains("localhost")) {
@@ -105,10 +109,9 @@ class MainActivity : ComponentActivity() {
 
             var serverUrl by remember { mutableStateOf(initialUrl) }
 
-            // Whenever sessionName changes, update session and PIN
-            LaunchedEffect(sessionName) {
-                session = sessionManager.getOrCreateSession(sessionName)
-                spectatorPin = session.spectatorPin
+            // Whenever sessionName or spectatorPin changes, refresh active session
+            LaunchedEffect(sessionName, spectatorPin) {
+                session = sessionManager.getOrCreateSession(sessionName, spectatorPin)
             }
 
             // Monitor buffer count from Room reactively in real time
@@ -132,6 +135,11 @@ class MainActivity : ComponentActivity() {
                     sessionName = clean
                     prefs.edit().putString(KEY_SESSION_NAME, clean).apply()
                 },
+                onSpectatorPinChange = { newPin ->
+                    val cleanPin = newPin.filter { it.isDigit() }.take(4)
+                    spectatorPin = cleanPin
+                    prefs.edit().putString(KEY_SPECTATOR_PIN, cleanPin).apply()
+                },
                 onServerUrlChange = { newUrl ->
                     serverUrl = newUrl
                     prefs.edit().putString(KEY_SERVER_URL, newUrl).apply()
@@ -144,9 +152,8 @@ class MainActivity : ComponentActivity() {
                 },
                 onToggleService = { enabled ->
                     if (enabled) {
-                        val activeSession = sessionManager.getOrCreateSession(sessionName)
+                        val activeSession = sessionManager.getOrCreateSession(sessionName, spectatorPin)
                         session = activeSession
-                        spectatorPin = activeSession.spectatorPin
                         startTrackingService(activeSession, serverUrl, isSimulationMode)
                     } else {
                         stopTrackingService()
@@ -217,9 +224,10 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val PREFS_NAME = "gateway_prefs"
-        private const val KEY_SERVER_URL = "server_url"
-        private const val KEY_SESSION_NAME = "session_name"
-        private const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
+        const val PREFS_NAME = "gateway_prefs"
+        const val KEY_SERVER_URL = "server_url"
+        const val KEY_SESSION_NAME = "session_name"
+        const val KEY_SPECTATOR_PIN = "spectator_pin"
+        const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
     }
 }

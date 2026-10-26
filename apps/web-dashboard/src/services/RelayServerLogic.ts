@@ -10,6 +10,8 @@ interface RoomSession {
   athleteName?: string;
   lastTelemetry?: unknown;
   lastNowPlaying?: unknown;
+  hasLoggedFirstTelemetry?: boolean;
+  verbose?: boolean;
 }
 
 interface RateLimitTracker {
@@ -24,6 +26,10 @@ interface SocketCloseContext {
   token: string;
   role: string;
   clientId: string;
+}
+
+export interface RelayServerOptions {
+  verbose?: boolean;
 }
 
 export interface SessionVerificationResult {
@@ -42,10 +48,10 @@ function broadcastToSpectators(room: RoomSession, payload: string) {
 
 function handleGatewayRegister(ws: WebSocket, room: RoomSession, msg: any) {
   room.sessionId = msg.sessionId;
-  room.spectatorPin = msg.spectatorPin;
+  room.spectatorPin = (msg.spectatorPin || '').toString().trim();
   room.athleteName = msg.athleteName;
   console.log(
-    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${msg.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"`,
+    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${room.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"`,
   );
   ws.send(JSON.stringify({ type: 'GATEWAY_REGISTER_ACK', status: 'READY' }));
 }
@@ -105,8 +111,8 @@ function handleDispatchCheer(
   const now = Date.now();
   if (isLockedOut(ws, tracker, now)) return;
 
-  const expectedPin = room.spectatorPin;
-  const providedPin = msg.spectatorPin;
+  const expectedPin = (room.spectatorPin || '').trim();
+  const providedPin = (msg.spectatorPin || '').toString().trim();
   const sender = msg.senderName || 'Anónimo';
   console.log(
     `📣 [RELAY] Ánimo recibido en "${room.token}" de "${sender}": "${msg.body}" (PIN recibido: "${providedPin}")`,
@@ -141,9 +147,17 @@ function handleTelemetrySnapshot(room: RoomSession, msg: any) {
   const metrics = msg.metrics || {};
   const hr = metrics.heartRateBpm ?? '--';
   const speed = metrics.speedMps != null ? Number(metrics.speedMps).toFixed(1) : '--';
-  console.log(
-    `🏃 [RELAY] Telemetría en "${room.token}" (#${msg.seq || '?'}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
-  );
+
+  if (!room.hasLoggedFirstTelemetry) {
+    room.hasLoggedFirstTelemetry = true;
+    console.log(
+      `🚀 [RELAY] Primer paquete de telemetría recibido en "${room.token}" (#${msg.seq || 1}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
+    );
+  } else if (room.verbose) {
+    console.log(
+      `🏃 [RELAY] Telemetría en "${room.token}" (#${msg.seq || '?'}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
+    );
+  }
   broadcastToSpectators(room, JSON.stringify(msg));
 }
 
@@ -162,22 +176,34 @@ function parseRawMessage(raw: unknown) {
   return JSON.parse(JSON.stringify(raw));
 }
 
-const MESSAGE_HANDLERS: Record<
-  string,
-  (ws: WebSocket, room: RoomSession, tracker: RateLimitTracker, msg: any) => void
-> = {
-  PING: (ws) => ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() })),
-  GATEWAY_REGISTER: (ws, room, _tracker, msg) => handleGatewayRegister(ws, room, msg),
-  DISPATCH_CHEER: (ws, room, tracker, msg) => handleDispatchCheer(ws, room, tracker, msg),
-  TELEMETRY_SNAPSHOT: (_ws, room, _tracker, msg) => handleTelemetrySnapshot(room, msg),
-  NOW_PLAYING_UPDATE: (_ws, room, _tracker, msg) => handleNowPlayingUpdate(room, msg),
-  SESSION_STATE_CHANGED: (_ws, room, _tracker, msg) => {
-    broadcastToSpectators(room, JSON.stringify(msg));
-  },
-  CHEER_STATUS_UPDATE: (_ws, room, _tracker, msg) => {
-    broadcastToSpectators(room, JSON.stringify(msg));
-  },
-};
+function processTypedMessage(
+  ws: WebSocket,
+  room: RoomSession,
+  tracker: RateLimitTracker,
+  msg: any,
+) {
+  switch (msg.type) {
+    case 'PING':
+      ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      break;
+    case 'GATEWAY_REGISTER':
+      handleGatewayRegister(ws, room, msg);
+      break;
+    case 'DISPATCH_CHEER':
+      handleDispatchCheer(ws, room, tracker, msg);
+      break;
+    case 'TELEMETRY_SNAPSHOT':
+      handleTelemetrySnapshot(room, msg);
+      break;
+    case 'NOW_PLAYING_UPDATE':
+      handleNowPlayingUpdate(room, msg);
+      break;
+    case 'SESSION_STATE_CHANGED':
+    case 'CHEER_STATUS_UPDATE':
+      broadcastToSpectators(room, JSON.stringify(msg));
+      break;
+  }
+}
 
 function handleSocketMessage(
   ws: WebSocket,
@@ -187,10 +213,7 @@ function handleSocketMessage(
 ) {
   try {
     const msg = parseRawMessage(raw);
-    const handler = MESSAGE_HANDLERS[msg.type];
-    if (handler) {
-      handler(ws, room, tracker, msg);
-    }
+    processTypedMessage(ws, room, tracker, msg);
   } catch {
     ws.send(
       JSON.stringify({ type: 'ERROR', code: 'INVALID_PAYLOAD', message: 'Malformed JSON payload' }),
@@ -236,6 +259,7 @@ function handleSocketClose(ctx: SocketCloseContext) {
   const { ws, room, rooms, token, role, clientId } = ctx;
   if (role === 'gateway') {
     if (room.gatewayWs === ws) room.gatewayWs = null;
+    room.hasLoggedFirstTelemetry = false;
     console.log(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"`);
   } else if (room.spectators.get(clientId) === ws) {
     room.spectators.delete(clientId);
@@ -253,6 +277,7 @@ function verifyRoomPin(
   token: string,
   pin: string,
 ): SessionVerificationResult {
+  const cleanPin = pin.trim();
   if (!room) {
     return {
       valid: false,
@@ -267,13 +292,17 @@ function verifyRoomPin(
       error: `La sesión "${token}" aún no ha registrado su PIN. Espera a que la pasarela Android se registre.`,
     };
   }
-  if (room.spectatorPin !== pin.trim()) {
+  if (room.spectatorPin !== cleanPin) {
+    console.warn(
+      `🔒 [RELAY] Verificación de PIN rechazada en "${token}": recibido "${cleanPin}" vs esperado "${room.spectatorPin}"`,
+    );
     return {
       valid: false,
       active: true,
       error: 'El PIN de 4 dígitos es incorrecto para esta sesión.',
     };
   }
+  console.log(`🔑 [RELAY] Verificación de PIN correcta para sesión "${token}"`);
   return {
     valid: true,
     active: true,
@@ -282,14 +311,16 @@ function verifyRoomPin(
   };
 }
 
-export function createRelayServer(wss: WebSocketServer) {
+export function createRelayServer(wss: WebSocketServer, options: RelayServerOptions = {}) {
   const rooms = new Map<string, RoomSession>();
   const clientRateLimits = new WeakMap<WebSocket, RateLimitTracker>();
+  const verbose = options.verbose === true;
 
-  function getOrCreateRoom(token: string): RoomSession {
+  function getOrCreateRoom(rawToken: string): RoomSession {
+    const token = rawToken.trim().toLowerCase();
     let room = rooms.get(token);
     if (!room) {
-      room = { token, gatewayWs: null, spectators: new Map() };
+      room = { token, gatewayWs: null, spectators: new Map(), verbose };
       rooms.set(token, room);
     }
     return room;
@@ -297,7 +328,7 @@ export function createRelayServer(wss: WebSocketServer) {
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const url = new URL(req.url || '', 'ws://localhost');
-    const token = url.searchParams.get('token') || 'default';
+    const token = (url.searchParams.get('token') || 'default').trim().toLowerCase();
     const role = url.searchParams.get('role') || 'spectator';
     const clientId =
       url.searchParams.get('clientId') || `spectator-${Math.random().toString(36).slice(2, 8)}`;
@@ -318,6 +349,7 @@ export function createRelayServer(wss: WebSocketServer) {
 
   return {
     close: () => rooms.clear(),
-    verifySession: (token: string, pin: string) => verifyRoomPin(rooms.get(token), token, pin),
+    verifySession: (token: string, pin: string) =>
+      verifyRoomPin(rooms.get(token.trim().toLowerCase()), token, pin),
   };
 }

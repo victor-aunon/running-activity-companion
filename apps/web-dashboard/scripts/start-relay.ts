@@ -4,9 +4,10 @@ import { WebSocketServer } from 'ws';
 import { createRelayServer } from '../src/services/RelayServerLogic.ts';
 
 const PORT = parseInt(process.env.WS_PORT || process.env.PORT || '3001', 10);
+const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 
 const wss = new WebSocketServer({ noServer: true });
-const relay = createRelayServer(wss);
+const relay = createRelayServer(wss, { verbose: isVerbose });
 
 const server = http.createServer((req, res) => {
   const { pathname, query } = parse(req.url || '', true);
@@ -61,7 +62,9 @@ server.listen(PORT, () => {
   console.log(
     `\n🚀 [RELAY] WebSocket Relay Server listening on: ws://localhost:${PORT}/api/ws/session`,
   );
-  console.log('📡 Ready to relay telemetry from Gateway/Simulator to Spectator Dashboards.');
+  console.log(
+    `📡 Ready to relay telemetry (${isVerbose ? 'Modo VERBOSE: 1 Hz' : 'Modo LIMPIO: primer paquete y desconexión | añade --verbose para ver cada segundo'})`,
+  );
   console.log('👉 In another terminal, run: pnpm --filter web-dashboard simulate:runner\n');
 });
 

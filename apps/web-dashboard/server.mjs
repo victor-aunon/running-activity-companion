@@ -29,8 +29,9 @@ const server = http.createServer((req, res) => {
   void handle(req, res, parsedUrl);
 });
 
+const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 const wss = new WebSocketServer({ noServer: true });
-const relay = createRelayServer(wss);
+const relay = createRelayServer(wss, { verbose: isVerbose });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = parse(req.url || '');
