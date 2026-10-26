@@ -1,5 +1,5 @@
 <settings>
     <setting propertyKey="@Properties.ServiceEnabled" title="@Strings.ServiceEnabledTitle">
-        <settingConfig type="boolean" default="true" />
+        <settingConfig type="boolean" />
     </setting>
 </settings>
