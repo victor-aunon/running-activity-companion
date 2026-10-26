@@ -30,7 +30,7 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
     }
 
-    private function checkServiceEnabled() as Void {
+    hidden function checkServiceEnabled() as Void {
         var val = Application.Properties.getValue("ServiceEnabled");
         if (val != null && val instanceof Lang.Boolean) {
             isServiceEnabled = val;

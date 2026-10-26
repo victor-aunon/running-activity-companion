@@ -8,7 +8,7 @@ class BleTransmitter {
     private var ringBuffer as Lang.Array<Lang.Dictionary> = [];
     private const MAX_BUFFER_SIZE = 10;
     private var retryTimer as Timer.Timer?;
-    private var cheerCallback as (Lang.Method(cheerData as Lang.Dictionary) as Void)?;
+    private var cheerCallback as Method?;
 
     function initialize() {
         ringBuffer = [];
@@ -16,11 +16,11 @@ class BleTransmitter {
         setupListener();
     }
 
-    private function setupListener() as Void {
+    hidden function setupListener() as Void {
         Communications.setMailboxListener(method(:onMailboxMessage));
     }
 
-    public function setCheerCallback(callback as (Lang.Method(cheerData as Lang.Dictionary) as Void)) as Void {
+    public function setCheerCallback(callback as Method?) as Void {
         cheerCallback = callback;
     }
 
@@ -52,7 +52,7 @@ class BleTransmitter {
         bufferPayload(failedPayload);
     }
 
-    private function scheduleRetry() as Void {
+    hidden function scheduleRetry() as Void {
         if (retryTimer != null) {
             retryTimer.start(method(:onRetryTrigger), 5000, false);
         }
@@ -67,7 +67,7 @@ class BleTransmitter {
         }
     }
 
-    private function flushBuffer() as Void {
+    hidden function flushBuffer() as Void {
         if (ringBuffer.size() > 0) {
             var nextPayload = ringBuffer[0];
             ringBuffer = ringBuffer.slice(1, ringBuffer.size());
