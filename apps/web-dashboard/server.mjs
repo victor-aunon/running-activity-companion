@@ -15,6 +15,17 @@ await app.prepare();
 
 const server = http.createServer((req, res) => {
   const parsedUrl = parse(req.url || '', true);
+  if (parsedUrl.pathname === '/api/session/verify') {
+    const token = parsedUrl.query.token || '';
+    const pin = parsedUrl.query.pin || '';
+    const result = relay.verifySession(token, pin);
+    res.writeHead(result.valid ? 200 : 401, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
   void handle(req, res, parsedUrl);
 });
 

@@ -25,7 +25,15 @@ function LandingHeader() {
   );
 }
 
-function TokenInputField({ token, setToken }: { token: string; setToken: (t: string) => void }) {
+function TokenInputField({
+  token,
+  setToken,
+  disabled,
+}: {
+  token: string;
+  setToken: (t: string) => void;
+  disabled: boolean;
+}) {
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -33,16 +41,25 @@ function TokenInputField({ token, setToken }: { token: string; setToken: (t: str
       </label>
       <input
         type="text"
+        disabled={disabled}
         value={token}
         onChange={(e) => setToken(e.target.value)}
-        placeholder="ej. maraton-madrid-2026"
-        className="w-full px-3.5 py-2.5 text-sm bg-slate-50/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+        placeholder="ej. carrera-victor"
+        className="w-full px-3.5 py-2.5 text-sm bg-slate-50/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
       />
     </div>
   );
 }
 
-function PinInputField({ pin, setPin }: { pin: string; setPin: (p: string) => void }) {
+function PinInputField({
+  pin,
+  setPin,
+  disabled,
+}: {
+  pin: string;
+  setPin: (p: string) => void;
+  disabled: boolean;
+}) {
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -52,10 +69,11 @@ function PinInputField({ pin, setPin }: { pin: string; setPin: (p: string) => vo
         <input
           type="password"
           maxLength={4}
+          disabled={disabled}
           value={pin}
           onChange={(e) => setPin(e.target.value)}
           placeholder="••••"
-          className="w-full px-3.5 py-2.5 text-sm font-mono tracking-widest bg-slate-50/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-full px-3.5 py-2.5 text-sm font-mono tracking-widest bg-slate-50/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
         />
         <KeyRound className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
       </div>
@@ -69,6 +87,7 @@ function SessionLookupForm({
   pin,
   setPin,
   error,
+  isLoading,
   onSubmit,
 }: {
   token: string;
@@ -76,23 +95,26 @@ function SessionLookupForm({
   pin: string;
   setPin: (p: string) => void;
   error: string | null;
+  isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <TokenInputField token={token} setToken={setToken} />
-      <PinInputField pin={pin} setPin={setPin} />
+      <TokenInputField token={token} setToken={setToken} disabled={isLoading} />
+      <PinInputField pin={pin} setPin={setPin} disabled={isLoading} />
       {error && (
-        <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
-          {error}
+        <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+          <span>❌</span>
+          <span>{error}</span>
         </div>
       )}
       <ActionButton
         type="submit"
         variant="primary"
+        disabled={isLoading}
         className="w-full justify-center py-2.5 text-sm"
       >
-        <span>Conectar en Vivo</span>
+        <span>{isLoading ? 'Verificando PIN...' : 'Conectar en Vivo'}</span>
         <ArrowRight className="w-4 h-4 ml-1" />
       </ActionButton>
     </form>
@@ -104,7 +126,7 @@ function DemoQuickAccessCard({ onQuickConnect }: { onQuickConnect: () => void })
     <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <Activity className="w-4 h-4 text-emerald-500" />
-        <span className="text-xs font-semibold text-slate-700">Sesión Activa Detectada</span>
+        <span className="text-xs font-semibold text-slate-700">Sesión Activa</span>
         <StatusBadge variant="live">EN VIVO</StatusBadge>
       </div>
       <button
@@ -112,34 +134,63 @@ function DemoQuickAccessCard({ onQuickConnect }: { onQuickConnect: () => void })
         onClick={onQuickConnect}
         className="text-xs font-bold text-orange-600 hover:text-orange-700 transition-colors inline-flex items-center gap-1"
       >
-        <span>Acceso Rápido</span>
+        <span>Autocompletar</span>
         <ShieldCheck className="w-3.5 h-3.5" />
       </button>
     </div>
   );
 }
 
-export default function SpectatorLandingPage() {
+function useSessionVerifier() {
   const router = useRouter();
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState('carrera-victor');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token.trim()) {
+    const cleanToken = token
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '-');
+    const cleanPin = pin.trim();
+
+    if (!cleanToken) {
       setError('Debes introducir un identificador de sesión.');
       return;
     }
-    if (!/^\d{4}$/.test(pin.trim())) {
+    if (!/^\d{4}$/.test(cleanPin)) {
       setError('El PIN debe tener exactamente 4 dígitos.');
       return;
     }
+
     setError(null);
-    router.push(
-      `/session/${encodeURIComponent(token.trim())}?pin=${encodeURIComponent(pin.trim())}`,
-    );
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/session/verify?token=${encodeURIComponent(cleanToken)}&pin=${encodeURIComponent(cleanPin)}`,
+      );
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setError(data.error || 'El PIN de espectador es incorrecto para esta sesión.');
+        setIsLoading(false);
+        return;
+      }
+      router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
+    } catch {
+      setError('No se pudo verificar la sesión. Asegúrate de que el servidor Relay esté activo.');
+      setIsLoading(false);
+    }
   };
+
+  return { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit };
+}
+
+export default function SpectatorLandingPage() {
+  const { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit } =
+    useSessionVerifier();
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex items-center justify-center">
@@ -152,14 +203,15 @@ export default function SpectatorLandingPage() {
             pin={pin}
             setPin={setPin}
             error={error}
+            isLoading={isLoading}
             onSubmit={handleSubmit}
           />
           <DemoQuickAccessCard
-            onQuickConnect={() =>
-              router.push(
-                `/session/${encodeURIComponent(token.trim() || 'live-session')}?pin=${encodeURIComponent(pin.trim() || '4829')}`,
-              )
-            }
+            onQuickConnect={() => {
+              setToken('carrera-victor');
+              setPin('4829');
+              setError(null);
+            }}
           />
         </div>
       </div>

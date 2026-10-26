@@ -5,8 +5,38 @@ import { createRelayServer } from '../src/services/RelayServerLogic.ts';
 
 const PORT = parseInt(process.env.WS_PORT || process.env.PORT || '3001', 10);
 
-const server = http.createServer((_req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
+const wss = new WebSocketServer({ noServer: true });
+const relay = createRelayServer(wss);
+
+const server = http.createServer((req, res) => {
+  const { pathname, query } = parse(req.url || '', true);
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    res.end();
+    return;
+  }
+
+  if (pathname === '/api/session/verify') {
+    const token = (query.token as string) || '';
+    const pin = (query.pin as string) || '';
+    const result = relay.verifySession(token, pin);
+    res.writeHead(result.valid ? 200 : 401, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+  });
   res.end(
     JSON.stringify({
       status: 'UP',
@@ -15,9 +45,6 @@ const server = http.createServer((_req, res) => {
     }),
   );
 });
-
-const wss = new WebSocketServer({ noServer: true });
-const relay = createRelayServer(wss);
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = parse(req.url || '');

@@ -26,6 +26,14 @@ interface SocketCloseContext {
   clientId: string;
 }
 
+export interface SessionVerificationResult {
+  valid: boolean;
+  active: boolean;
+  error?: string;
+  athleteName?: string;
+  token?: string;
+}
+
 function broadcastToSpectators(room: RoomSession, payload: string) {
   room.spectators.forEach((s) => {
     if (s.readyState === WebSocket.OPEN) s.send(payload);
@@ -77,6 +85,17 @@ function handleInvalidPin(ws: WebSocket, tracker: RateLimitTracker, now: number)
   );
 }
 
+function forwardCheerToGateway(room: RoomSession, msg: any) {
+  if (room.gatewayWs && room.gatewayWs.readyState === WebSocket.OPEN) {
+    room.gatewayWs.send(JSON.stringify(msg));
+    console.log(`📲 [RELAY] Ánimo reenviado a la pasarela Android para el reloj`);
+  } else {
+    console.warn(
+      `⚠️ [RELAY] Pasarela Android no conectada en sesión "${room.token}", ánimo no entregado`,
+    );
+  }
+}
+
 function handleDispatchCheer(
   ws: WebSocket,
   room: RoomSession,
@@ -86,15 +105,24 @@ function handleDispatchCheer(
   const now = Date.now();
   if (isLockedOut(ws, tracker, now)) return;
 
-  if (!room.spectatorPin || msg.spectatorPin !== room.spectatorPin) {
+  const expectedPin = room.spectatorPin;
+  const providedPin = msg.spectatorPin;
+  const sender = msg.senderName || 'Anónimo';
+  console.log(
+    `📣 [RELAY] Ánimo recibido en "${room.token}" de "${sender}": "${msg.body}" (PIN recibido: "${providedPin}")`,
+  );
+
+  if (!expectedPin || providedPin !== expectedPin) {
+    console.warn(
+      `❌ [RELAY] Ánimo rechazado en "${room.token}": PIN "${providedPin}" no coincide con "${expectedPin || 'NO REGISTRADO'}"`,
+    );
     handleInvalidPin(ws, tracker, now);
     return;
   }
 
   tracker.failedAttempts = 0;
-  if (room.gatewayWs && room.gatewayWs.readyState === WebSocket.OPEN) {
-    room.gatewayWs.send(JSON.stringify(msg));
-  }
+  console.log(`✅ [RELAY] PIN válido para sesión "${room.token}"`);
+  forwardCheerToGateway(room, msg);
 
   broadcastToSpectators(
     room,
@@ -220,6 +248,40 @@ function handleSocketClose(ctx: SocketCloseContext) {
   }
 }
 
+function verifyRoomPin(
+  room: RoomSession | undefined,
+  token: string,
+  pin: string,
+): SessionVerificationResult {
+  if (!room) {
+    return {
+      valid: false,
+      active: false,
+      error: `No existe la sesión "${token}". Inicia el servicio en la app Android primero.`,
+    };
+  }
+  if (!room.spectatorPin) {
+    return {
+      valid: false,
+      active: true,
+      error: `La sesión "${token}" aún no ha registrado su PIN. Espera a que la pasarela Android se registre.`,
+    };
+  }
+  if (room.spectatorPin !== pin.trim()) {
+    return {
+      valid: false,
+      active: true,
+      error: 'El PIN de 4 dígitos es incorrecto para esta sesión.',
+    };
+  }
+  return {
+    valid: true,
+    active: true,
+    athleteName: room.athleteName || 'Atleta',
+    token: room.token,
+  };
+}
+
 export function createRelayServer(wss: WebSocketServer) {
   const rooms = new Map<string, RoomSession>();
   const clientRateLimits = new WeakMap<WebSocket, RateLimitTracker>();
@@ -254,5 +316,8 @@ export function createRelayServer(wss: WebSocketServer) {
     ws.on('close', () => handleSocketClose({ ws, room, rooms, token, role, clientId }));
   });
 
-  return { close: () => rooms.clear() };
+  return {
+    close: () => rooms.clear(),
+    verifySession: (token: string, pin: string) => verifyRoomPin(rooms.get(token), token, pin),
+  };
 }

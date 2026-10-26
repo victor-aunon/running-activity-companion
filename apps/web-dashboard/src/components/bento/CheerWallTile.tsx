@@ -178,23 +178,37 @@ interface CheerActionSectionProps {
   errorMsg: string | null;
   senderName: string;
   onSenderNameChange: (name: string) => void;
+  pin: string;
+  onPinChange: (pin: string) => void;
 }
 
-function SpectatorNameInput({
+function SpectatorCredentialsInput({
   senderName,
   onSenderNameChange,
+  pin,
+  onPinChange,
 }: {
   senderName: string;
   onSenderNameChange: (name: string) => void;
+  pin: string;
+  onPinChange: (pin: string) => void;
 }) {
   return (
-    <div className="mb-2">
+    <div className="grid grid-cols-2 gap-2 mb-2">
       <input
         type="text"
         placeholder="Tu nombre (ej. Laura)..."
         value={senderName}
         onChange={(e) => onSenderNameChange(e.target.value)}
         className="w-full px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
+      />
+      <input
+        type="password"
+        maxLength={4}
+        placeholder="PIN (4 dígitos)..."
+        value={pin}
+        onChange={(e) => onPinChange(e.target.value)}
+        className="w-full px-3 py-1.5 text-xs font-mono tracking-wider bg-slate-100 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
       />
     </div>
   );
@@ -207,13 +221,20 @@ function CheerActionSection({
   errorMsg,
   senderName,
   onSenderNameChange,
+  pin,
+  onPinChange,
 }: CheerActionSectionProps) {
   return (
     <div>
       <p className="text-xs font-semibold text-slate-600 mb-1">
         Envía un ánimo rápido al reloj de {athlete}:
       </p>
-      <SpectatorNameInput senderName={senderName} onSenderNameChange={onSenderNameChange} />
+      <SpectatorCredentialsInput
+        senderName={senderName}
+        onSenderNameChange={onSenderNameChange}
+        pin={pin}
+        onPinChange={onPinChange}
+      />
       <PresetButtons disabled={isDisabled} onSend={(p, t) => void onSendCheer(p, t)} />
       <CustomCheerForm disabled={isDisabled} onSend={(t) => void onSendCheer('CUSTOM', t)} />
       {errorMsg && (
@@ -229,8 +250,8 @@ function CheerActionSection({
 export function CheerWallTile({
   cheers,
   onSendCheer,
-  pin: _pin,
-  onPinChange: _onPinChange,
+  pin,
+  onPinChange,
   senderName,
   onSenderNameChange,
   isSubmitting = false,
@@ -254,6 +275,8 @@ export function CheerWallTile({
           errorMsg={errorMsg}
           senderName={senderName}
           onSenderNameChange={onSenderNameChange}
+          pin={pin}
+          onPinChange={onPinChange}
         />
       </div>
       <CheerFeed displayCheers={cheers} />
