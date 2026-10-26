@@ -27,6 +27,9 @@ function handleGatewayRegister(ws: WebSocket, room: RoomSession, msg: any) {
   room.sessionId = msg.sessionId;
   room.spectatorPin = msg.spectatorPin;
   room.athleteName = msg.athleteName;
+  console.log(
+    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${msg.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"`,
+  );
   ws.send(JSON.stringify({ type: 'GATEWAY_REGISTER_ACK', status: 'READY' }));
 }
 
@@ -164,8 +167,12 @@ export function createRelayServer(wss: WebSocketServer) {
 
     if (role === 'gateway') {
       room.gatewayWs = ws;
+      console.log(`📡 [RELAY] Pasarela Android conectada en sesión "${token}"`);
     } else {
       room.spectators.add(ws);
+      console.log(
+        `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
+      );
       if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
       if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
     }
@@ -178,8 +185,12 @@ export function createRelayServer(wss: WebSocketServer) {
     ws.on('close', () => {
       if (role === 'gateway') {
         if (room.gatewayWs === ws) room.gatewayWs = null;
+        console.log(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"`);
       } else {
         room.spectators.delete(ws);
+        console.log(
+          `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})`,
+        );
       }
       if (!room.gatewayWs && room.spectators.size === 0) rooms.delete(token);
     });

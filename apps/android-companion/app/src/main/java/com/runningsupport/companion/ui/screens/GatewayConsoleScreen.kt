@@ -24,10 +24,12 @@ fun GatewayConsoleScreen(
     isServiceRunning: Boolean,
     isGarminConnected: Boolean,
     isCloudConnected: Boolean,
+    isSimulationMode: Boolean,
     pendingBufferCount: Int,
     spectatorPin: String,
     serverUrl: String,
     onServerUrlChange: (String) -> Unit,
+    onToggleSimulationMode: (Boolean) -> Unit,
     onToggleService: (Boolean) -> Unit
 ) {
     Scaffold(
@@ -83,6 +85,43 @@ fun GatewayConsoleScreen(
                 }
             }
 
+            // Simulation Mode Toggle Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Simular Carrera (Sin Reloj)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "Genera telemetría GPS a 1 Hz y pulso virtual para pruebas",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            lineHeight = 16.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = isSimulationMode,
+                        enabled = !isServiceRunning,
+                        onCheckedChange = onToggleSimulationMode
+                    )
+                }
+            }
+
             // Spectator PIN Card
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -133,6 +172,13 @@ fun GatewayConsoleScreen(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("ws://10.0.2.2:3001/api/ws/session") }
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "💡 Emulador: ws://10.0.2.2:3001/api/ws/session\n💡 Móvil físico: usa la IP de tu PC (ej: ws://192.168.1.XX:3001/api/ws/session)",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B),
+                        lineHeight = 15.sp
+                    )
                 }
             }
 
@@ -160,11 +206,16 @@ fun GatewayConsoleScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("Garmin Fenix 7s (BLE)", fontSize = 14.sp, color = Color(0xFF334155))
+                        val (garminText, garminColor) = when {
+                            isSimulationMode -> "SIMULADO (1 Hz)" to Color(0xFF16A34A)
+                            isGarminConnected -> "CONECTADO" to Color(0xFF16A34A)
+                            else -> "DESCONECTADO" to Color(0xFFDC2626)
+                        }
                         Text(
-                            text = if (isGarminConnected) "CONECTADO" else "DESCONECTADO",
+                            text = garminText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isGarminConnected) Color(0xFF16A34A) else Color(0xFFDC2626)
+                            color = garminColor
                         )
                     }
 
@@ -174,10 +225,10 @@ fun GatewayConsoleScreen(
                     ) {
                         Text("Servidor Nube (WebSocket)", fontSize = 14.sp, color = Color(0xFF334155))
                         Text(
-                            text = if (isCloudConnected) "EN LÍNEA" else "RECONECTANDO",
+                            text = if (isCloudConnected) "EN LÍNEA" else "DESCONECTADO",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isCloudConnected) Color(0xFF16A34A) else Color(0xFFD97706)
+                            color = if (isCloudConnected) Color(0xFF16A34A) else Color(0xFFDC2626)
                         )
                     }
 

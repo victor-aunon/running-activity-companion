@@ -1,9 +1,12 @@
 package com.runningsupport.companion.network
 
 import android.util.Log
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -11,6 +14,8 @@ import java.util.concurrent.TimeUnit
 class WebSocketGatewayClient(
     private val serverUrl: String,
     private val token: String,
+    private val sessionId: String,
+    private val spectatorPin: String,
     private val scope: CoroutineScope
 ) {
     private val client = OkHttpClient.Builder()
@@ -26,7 +31,7 @@ class WebSocketGatewayClient(
     val incomingCheers: SharedFlow<JSONObject> = _incomingCheers
 
     private val _connectionState = MutableSharedFlow<Boolean>(replay = 1)
-    val connectionState: SharedFlow<Boolean> = _connectionState
+    val connectionState: SharedFlow<Boolean> = _connectionState.asSharedFlow()
 
     fun connect() {
         shouldReconnect = true
@@ -38,6 +43,14 @@ class WebSocketGatewayClient(
                 isConnected = true
                 _connectionState.tryEmit(true)
                 Log.i(TAG, "Gateway WebSocket connected to $fullUrl")
+
+                val registerMsg = JSONObject().apply {
+                    put("type", "GATEWAY_REGISTER")
+                    put("sessionId", sessionId)
+                    put("spectatorPin", spectatorPin)
+                    put("athleteName", "Víctor")
+                }
+                ws.send(registerMsg.toString())
             }
 
             override fun onMessage(ws: WebSocket, text: String) {

@@ -13,11 +13,34 @@ class GarminDataFieldManager(
     private val scope: CoroutineScope
 ) {
     private val db = AppDatabase.getDatabase(context)
+    private var mockDataSource: MockTelemetryDataSource? = null
+    private var telemetryListener: ((JSONObject) -> Unit)? = null
+
+    fun setTelemetryListener(listener: (JSONObject) -> Unit) {
+        this.telemetryListener = listener
+    }
+
+    fun setSimulationMode(enabled: Boolean, sessionId: String) {
+        if (enabled) {
+            Log.i(TAG, "Starting MockTelemetryDataSource simulation for session: $sessionId")
+            mockDataSource?.stop()
+            mockDataSource = MockTelemetryDataSource { snapshot ->
+                onBleMessageReceived(sessionId, snapshot)
+            }
+            mockDataSource?.start(scope)
+        } else {
+            mockDataSource?.stop()
+            mockDataSource = null
+        }
+    }
 
     fun onBleMessageReceived(sessionId: String, payload: JSONObject) {
         try {
             val type = payload.optString("type")
             if (type != "TELEMETRY_SNAPSHOT") return
+
+            // Forward directly to live listener (e.g. WebSocket gateway)
+            telemetryListener?.invoke(payload)
 
             val seq = payload.optLong("seq", 0)
             val timestamp = payload.optLong("timestamp", System.currentTimeMillis())

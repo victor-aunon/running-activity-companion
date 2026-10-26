@@ -82,9 +82,11 @@ class MainActivity : ComponentActivity() {
         requestRequiredPermissions()
 
         setContent {
-            var isServiceRunning by remember { mutableStateOf(false) }
-            var isGarminConnected by remember { mutableStateOf(true) }
-            var isCloudConnected by remember { mutableStateOf(false) }
+            val isServiceRunning by RunningActivityService.isServiceRunningState.collectAsState()
+            val isCloudConnected by RunningActivityService.isCloudConnectedState.collectAsState()
+            val isGarminConnected by RunningActivityService.isGarminConnectedState.collectAsState()
+            var isSimulationMode by remember { mutableStateOf(false) }
+
             var pendingBufferCount by remember { mutableStateOf(0) }
             var spectatorPin by remember { mutableStateOf("4829") }
             var serverUrl by remember {
@@ -105,6 +107,7 @@ class MainActivity : ComponentActivity() {
                 isServiceRunning = isServiceRunning,
                 isGarminConnected = isGarminConnected,
                 isCloudConnected = isCloudConnected,
+                isSimulationMode = isSimulationMode,
                 pendingBufferCount = pendingBufferCount,
                 spectatorPin = spectatorPin,
                 serverUrl = serverUrl,
@@ -112,15 +115,15 @@ class MainActivity : ComponentActivity() {
                     serverUrl = newUrl
                     prefs.edit().putString(KEY_SERVER_URL, newUrl).apply()
                 },
+                onToggleSimulationMode = { enabled ->
+                    isSimulationMode = enabled
+                },
                 onToggleService = { enabled ->
-                    isServiceRunning = enabled
                     if (enabled) {
-                        startTrackingService(session, serverUrl)
-                        isCloudConnected = true
+                        startTrackingService(session, serverUrl, isSimulationMode)
                     } else {
                         stopTrackingService()
                         sessionManager.markSessionCompleted()
-                        isCloudConnected = false
                     }
                 }
             )
@@ -141,11 +144,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startTrackingService(session: ActiveSessionState, serverUrl: String) {
+    private fun startTrackingService(
+        session: ActiveSessionState,
+        serverUrl: String,
+        isSimulation: Boolean
+    ) {
         val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
             putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
             putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
+            putExtra(RunningActivityService.EXTRA_PIN, session.spectatorPin)
             putExtra(RunningActivityService.EXTRA_SERVER_URL, serverUrl)
+            putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)

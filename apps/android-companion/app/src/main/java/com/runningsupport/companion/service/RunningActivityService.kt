@@ -16,6 +16,8 @@ import com.runningsupport.companion.data.entities.CheerEntity
 import com.runningsupport.companion.garmin.GarminDataFieldManager
 import com.runningsupport.companion.network.WebSocketGatewayClient
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
 class RunningActivityService : Service() {
@@ -41,10 +43,29 @@ class RunningActivityService : Service() {
         val serverUrl = intent?.getStringExtra(EXTRA_SERVER_URL) ?: DEFAULT_SERVER_URL
         val token = intent?.getStringExtra(EXTRA_TOKEN) ?: "default-token"
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: "default-session"
+        val pin = intent?.getStringExtra(EXTRA_PIN) ?: "4829"
+        val isSimulation = intent?.getBooleanExtra(EXTRA_SIMULATION_MODE, false) ?: false
         activeSessionId = sessionId
 
-        gatewayClient = WebSocketGatewayClient(serverUrl, token, serviceScope)
+        gatewayClient = WebSocketGatewayClient(serverUrl, token, sessionId, pin, serviceScope)
         gatewayClient?.connect()
+
+        // Track cloud connection state
+        serviceScope.launch {
+            gatewayClient?.connectionState?.collect { connected ->
+                _isCloudConnectedState.value = connected
+            }
+        }
+
+        // Forward telemetry from Garmin (or simulation) to WebSocket gateway
+        garminManager?.setTelemetryListener { snapshot ->
+            gatewayClient?.send(snapshot)
+        }
+
+        // Configure simulation mode
+        garminManager?.setSimulationMode(isSimulation, sessionId)
+        _isGarminConnectedState.value = isSimulation
+        _isServiceRunningState.value = true
 
         spotifyManager = SpotifyMediaSessionService(this) { state, pos, id, title, artist, album, art, dur, url ->
             val sId = activeSessionId ?: sessionId
@@ -99,35 +120,33 @@ class RunningActivityService : Service() {
     fun onSessionCompleted() {
         activeSessionId?.let { sId ->
             serviceScope.launch {
-                db.cheerDao().expireInFlightCheersOnSessionCompleted(sId)
-                db.telemetryBufferDao().pruneOldSessions()
-                Log.i(TAG, "Session $sId marked completed; in-flight cheers expired.")
+                val completeEvent = JSONObject().apply {
+                    put("type", "SESSION_STATE_CHANGED")
+                    put("sessionId", sId)
+                    put("status", "COMPLETED")
+                    put("timestamp", System.currentTimeMillis())
+                }
+                gatewayClient?.send(completeEvent)
+                gatewayClient?.disconnect()
             }
         }
     }
 
-    private fun acquireWakeLock() {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RunningSupport::Lock").apply {
-            acquire(4 * 60 * 60 * 1000L) // 4 hours max
-        }
-    }
-
     private fun startForegroundServiceNotification() {
-        val channelId = "running_activity_service"
+        val channelId = "running_activity_gateway_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "Running Support Tracking",
+                "Running Activity Gateway",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+            manager.createNotificationChannel(channel)
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Running Support En Vivo")
-            .setContentText("Relé activo: Garmin Fenix 7s ➔ Nube")
+            .setContentTitle("Running Support Gateway")
+            .setContentText("Transmitiendo telemetría en tiempo real")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .build()
@@ -137,9 +156,13 @@ class RunningActivityService : Service() {
 
     override fun onDestroy() {
         serviceJob.cancel()
+        garminManager?.setSimulationMode(false, "")
         spotifyManager?.unregister()
         spotifyManager = null
         gatewayClient?.disconnect()
+        _isServiceRunningState.value = false
+        _isCloudConnectedState.value = false
+        _isGarminConnectedState.value = false
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
         }
@@ -148,11 +171,32 @@ class RunningActivityService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun acquireWakeLock() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "RunningSupport:GatewayWakeLock"
+        ).apply {
+            acquire(4 * 60 * 60 * 1000L) // 4 hours maximum timeout
+        }
+    }
+
     companion object {
         const val EXTRA_SERVER_URL = "extra_server_url"
         const val EXTRA_TOKEN = "extra_token"
         const val EXTRA_SESSION_ID = "extra_session_id"
+        const val EXTRA_PIN = "extra_pin"
+        const val EXTRA_SIMULATION_MODE = "extra_simulation_mode"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
+
+        private val _isServiceRunningState = MutableStateFlow(false)
+        val isServiceRunningState = _isServiceRunningState.asStateFlow()
+
+        private val _isCloudConnectedState = MutableStateFlow(false)
+        val isCloudConnectedState = _isCloudConnectedState.asStateFlow()
+
+        private val _isGarminConnectedState = MutableStateFlow(false)
+        val isGarminConnectedState = _isGarminConnectedState.asStateFlow()
     }
 }
