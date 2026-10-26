@@ -36,52 +36,58 @@ class WebSocketGatewayClient(
     fun connect() {
         shouldReconnect = true
         val fullUrl = "$serverUrl?token=$token&role=gateway"
-        val request = Request.Builder().url(fullUrl).build()
+        try {
+            val request = Request.Builder().url(fullUrl).build()
 
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
-                isConnected = true
-                _connectionState.tryEmit(true)
-                Log.i(TAG, "Gateway WebSocket connected to $fullUrl")
+            webSocket = client.newWebSocket(request, object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    isConnected = true
+                    _connectionState.tryEmit(true)
+                    Log.i(TAG, "Gateway WebSocket connected to $fullUrl")
 
-                val registerMsg = JSONObject().apply {
-                    put("type", "GATEWAY_REGISTER")
-                    put("sessionId", sessionId)
-                    put("spectatorPin", spectatorPin)
-                    put("athleteName", "Víctor")
-                }
-                ws.send(registerMsg.toString())
-            }
-
-            override fun onMessage(ws: WebSocket, text: String) {
-                try {
-                    val json = JSONObject(text)
-                    val type = json.optString("type")
-                    if (type == "DISPATCH_CHEER") {
-                        _incomingCheers.tryEmit(json)
+                    val registerMsg = JSONObject().apply {
+                        put("type", "GATEWAY_REGISTER")
+                        put("sessionId", sessionId)
+                        put("spectatorPin", spectatorPin)
+                        put("athleteName", "Víctor")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing incoming WebSocket frame: ${e.message}")
+                    ws.send(registerMsg.toString())
                 }
-            }
 
-            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                isConnected = false
-                _connectionState.tryEmit(false)
-            }
-
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                isConnected = false
-                _connectionState.tryEmit(false)
-                Log.w(TAG, "WebSocket failure: ${t.message}. Reconnecting in 3s...")
-                if (shouldReconnect) {
-                    scope.launch {
-                        delay(3000)
-                        connect()
+                override fun onMessage(ws: WebSocket, text: String) {
+                    try {
+                        val json = JSONObject(text)
+                        val type = json.optString("type")
+                        if (type == "DISPATCH_CHEER") {
+                            _incomingCheers.tryEmit(json)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing incoming WebSocket frame: ${e.message}")
                     }
                 }
-            }
-        })
+
+                override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                    isConnected = false
+                    _connectionState.tryEmit(false)
+                }
+
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    isConnected = false
+                    _connectionState.tryEmit(false)
+                    Log.w(TAG, "WebSocket failure: ${t.message}. Reconnecting in 3s...")
+                    if (shouldReconnect) {
+                        scope.launch {
+                            delay(3000)
+                            connect()
+                        }
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initiating WebSocket to $fullUrl: ${e.message}")
+            isConnected = false
+            _connectionState.tryEmit(false)
+        }
     }
 
     fun send(payload: JSONObject): Boolean {

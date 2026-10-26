@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,18 +90,24 @@ class MainActivity : ComponentActivity() {
 
             var pendingBufferCount by remember { mutableStateOf(0) }
             var spectatorPin by remember { mutableStateOf("4829") }
-            var serverUrl by remember {
-                mutableStateOf(
-                    prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
-                )
+
+            val savedUrl = prefs.getString(KEY_SERVER_URL, null)
+            val initialUrl = if (savedUrl != null && !savedUrl.contains("localhost")) {
+                savedUrl
+            } else {
+                DEFAULT_SERVER_URL
             }
+
+            var serverUrl by remember { mutableStateOf(initialUrl) }
 
             val session = remember { sessionManager.getOrCreateSession() }
             spectatorPin = session.spectatorPin
 
-            // Monitor buffer count from Room
+            // Monitor buffer count from Room reactively in real time
             LaunchedEffect(session.sessionId) {
-                pendingBufferCount = db.telemetryBufferDao().getUnsyncedCount(session.sessionId)
+                db.telemetryBufferDao().observeUnsyncedCount(session.sessionId).collect { count ->
+                    pendingBufferCount = count
+                }
             }
 
             GatewayConsoleScreen(
@@ -147,28 +154,49 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun sanitizeServerUrl(rawUrl: String): String {
+        val trimmed = rawUrl.trim()
+        val isEmulator = Build.FINGERPRINT.contains("generic") ||
+                         Build.HARDWARE.contains("ranchu") ||
+                         Build.HARDWARE.contains("goldfish") ||
+                         Build.MODEL.contains("google_sdk")
+        if (isEmulator && trimmed.contains("localhost")) {
+            return trimmed.replace("localhost", "10.0.2.2")
+        }
+        return trimmed
+    }
+
     private fun startTrackingService(
         session: ActiveSessionState,
         serverUrl: String,
         isSimulation: Boolean
     ) {
-        val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
-            putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
-            putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
-            putExtra(RunningActivityService.EXTRA_PIN, session.spectatorPin)
-            putExtra(RunningActivityService.EXTRA_SERVER_URL, serverUrl)
-            putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        try {
+            val resolvedUrl = sanitizeServerUrl(serverUrl)
+            val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
+                putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
+                putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
+                putExtra(RunningActivityService.EXTRA_PIN, session.spectatorPin)
+                putExtra(RunningActivityService.EXTRA_SERVER_URL, resolvedUrl)
+                putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error launching foreground service: ${e.message}", e)
         }
     }
 
     private fun stopTrackingService() {
-        val serviceIntent = Intent(this, RunningActivityService::class.java)
-        stopService(serviceIntent)
+        try {
+            val serviceIntent = Intent(this, RunningActivityService::class.java)
+            stopService(serviceIntent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error stopping service: ${e.message}", e)
+        }
     }
 
     companion object {

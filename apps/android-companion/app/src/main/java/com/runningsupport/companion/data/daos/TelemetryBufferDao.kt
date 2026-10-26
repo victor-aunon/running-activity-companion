@@ -3,6 +3,7 @@ package com.runningsupport.companion.data.daos
 import androidx.room.*
 import com.runningsupport.companion.data.entities.SessionEntity
 import com.runningsupport.companion.data.entities.TelemetryEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TelemetryBufferDao {
@@ -24,6 +25,9 @@ interface TelemetryBufferDao {
 
     @Query("SELECT COUNT(*) FROM telemetry_buffer WHERE sessionId = :sessionId AND synced = 0")
     suspend fun getUnsyncedCount(sessionId: String): Int
+
+    @Query("SELECT COUNT(*) FROM telemetry_buffer WHERE sessionId = :sessionId AND synced = 0")
+    fun observeUnsyncedCount(sessionId: String): Flow<Int>
 
     // FIFO Eviction when buffer exceeds 50,000 records
     @Query("""

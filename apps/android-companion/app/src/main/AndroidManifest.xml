@@ -20,7 +20,6 @@
     <!-- Servicio en primer plano y Wakelock para mantener conexión con pantalla apagada -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -30,7 +29,8 @@
         android:label="Running Support Gateway"
         android:roundIcon="@android:drawable/ic_dialog_info"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".ui.MainActivity"
@@ -46,7 +46,7 @@
             android:name=".service.RunningActivityService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync|connectedDevice" />
+            android:foregroundServiceType="dataSync" />
 
     </application>
 
