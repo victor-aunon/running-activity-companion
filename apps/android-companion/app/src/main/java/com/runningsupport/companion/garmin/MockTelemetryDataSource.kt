@@ -4,6 +4,7 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 
 class MockTelemetryDataSource(
+    private val sessionId: String,
     private val onSnapshotGenerated: (JSONObject) -> Unit
 ) {
     private var job: Job? = null
@@ -17,6 +18,7 @@ class MockTelemetryDataSource(
                 seq++
                 val snapshot = JSONObject().apply {
                     put("type", "TELEMETRY_SNAPSHOT")
+                    put("sessionId", sessionId)
                     put("seq", seq)
                     put("timestamp", System.currentTimeMillis())
 

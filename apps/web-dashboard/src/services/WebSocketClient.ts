@@ -16,6 +16,7 @@ export interface WebSocketClientOptions {
   url: string;
   token: string;
   role?: 'spectator' | 'gateway';
+  clientId?: string;
   heartbeatIntervalMs?: number;
   initialReconnectDelayMs?: number;
   maxReconnectDelayMs?: number;
@@ -24,6 +25,7 @@ export interface WebSocketClientOptions {
 export class WebSocketClient {
   private ws: WebSocket | null = null;
   private options: Required<WebSocketClientOptions>;
+  private clientId: string;
   private messageHandlers: Set<MessageHandler> = new Set();
   private stateHandlers: Set<StateChangeHandler> = new Set();
   private state: ConnectionState = 'DISCONNECTED';
@@ -33,8 +35,10 @@ export class WebSocketClient {
   private explicitlyClosed = false;
 
   constructor(options: WebSocketClientOptions) {
+    this.clientId = options.clientId || `client-${Math.random().toString(36).slice(2, 10)}`;
     this.options = {
       role: 'spectator',
+      clientId: this.clientId,
       heartbeatIntervalMs: 15000,
       initialReconnectDelayMs: 1000,
       maxReconnectDelayMs: 16000,
@@ -48,9 +52,21 @@ export class WebSocketClient {
     this.explicitlyClosed = false;
     this.setState('CONNECTING');
 
+    if (this.ws) {
+      try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        this.ws.close();
+      } catch {
+        // Safe disposal of existing socket
+      }
+      this.ws = null;
+    }
+
     const wsUrl = new URL(this.options.url, window.location.origin.replace(/^http/, 'ws'));
     wsUrl.searchParams.set('token', this.options.token);
     wsUrl.searchParams.set('role', this.options.role);
+    wsUrl.searchParams.set('clientId', this.clientId);
 
     try {
       this.ws = new WebSocket(wsUrl.toString());

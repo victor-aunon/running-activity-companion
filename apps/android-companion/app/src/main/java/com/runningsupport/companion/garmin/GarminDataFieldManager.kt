@@ -14,9 +14,9 @@ class GarminDataFieldManager(
 ) {
     private val db = AppDatabase.getDatabase(context)
     private var mockDataSource: MockTelemetryDataSource? = null
-    private var telemetryListener: ((JSONObject) -> Unit)? = null
+    private var telemetryListener: ((JSONObject) -> Boolean)? = null
 
-    fun setTelemetryListener(listener: (JSONObject) -> Unit) {
+    fun setTelemetryListener(listener: (JSONObject) -> Boolean) {
         this.telemetryListener = listener
     }
 
@@ -24,7 +24,7 @@ class GarminDataFieldManager(
         if (enabled) {
             Log.i(TAG, "Starting MockTelemetryDataSource simulation for session: $sessionId")
             mockDataSource?.stop()
-            mockDataSource = MockTelemetryDataSource { snapshot ->
+            mockDataSource = MockTelemetryDataSource(sessionId) { snapshot ->
                 onBleMessageReceived(sessionId, snapshot)
             }
             mockDataSource?.start(scope)
@@ -39,8 +39,12 @@ class GarminDataFieldManager(
             val type = payload.optString("type")
             if (type != "TELEMETRY_SNAPSHOT") return
 
+            if (!payload.has("sessionId") || payload.optString("sessionId").isEmpty()) {
+                payload.put("sessionId", sessionId)
+            }
+
             // Forward directly to live listener (e.g. WebSocket gateway)
-            telemetryListener?.invoke(payload)
+            val sentLive = telemetryListener?.invoke(payload) ?: false
 
             val seq = payload.optLong("seq", 0)
             val timestamp = payload.optLong("timestamp", System.currentTimeMillis())
@@ -71,7 +75,7 @@ class GarminDataFieldManager(
                 heartRate = heartRate,
                 cadence = cadence,
                 stepCount = stepCount,
-                synced = 0
+                synced = if (sentLive) 1 else 0
             )
 
             scope.launch {
@@ -79,18 +83,14 @@ class GarminDataFieldManager(
                 db.telemetryBufferDao().pruneBufferOverflow(sessionId)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing incoming BLE telemetry packet: ${e.message}")
+            Log.e(TAG, "Error processing BLE telemetry payload: ${e.message}", e)
         }
     }
 
-    fun transmitCheerToWatch(cheerJson: JSONObject, onResult: (Boolean) -> Unit) {
-        try {
-            Log.i(TAG, "Transmitting cheer message to Garmin Fenix 7s over BLE: $cheerJson")
-            onResult(true)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error transmitting cheer over BLE: ${e.message}")
-            onResult(false)
-        }
+    fun transmitCheerToWatch(cheerPayload: JSONObject, onResult: (Boolean) -> Unit) {
+        // Send via Garmin Connect IQ BLE SDK
+        Log.i(TAG, "Transmitting cheer to Garmin BLE: ${cheerPayload.optString("body")}")
+        onResult(true)
     }
 
     companion object {

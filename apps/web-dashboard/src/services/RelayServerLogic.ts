@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'http';
 interface RoomSession {
   token: string;
   gatewayWs: WebSocket | null;
-  spectators: Set<WebSocket>;
+  spectators: Map<string, WebSocket>;
   sessionId?: string;
   spectatorPin?: string;
   athleteName?: string;
@@ -15,6 +15,15 @@ interface RoomSession {
 interface RateLimitTracker {
   failedAttempts: number;
   lockedUntil: number;
+}
+
+interface SocketCloseContext {
+  ws: WebSocket;
+  room: RoomSession;
+  rooms: Map<string, RoomSession>;
+  token: string;
+  role: string;
+  clientId: string;
 }
 
 function broadcastToSpectators(room: RoomSession, payload: string) {
@@ -99,12 +108,23 @@ function handleDispatchCheer(
   );
 }
 
-function handleBroadcastOrTelemetry(room: RoomSession, msg: { type: string }) {
-  if (msg.type === 'TELEMETRY_SNAPSHOT') {
-    room.lastTelemetry = msg;
-  } else if (msg.type === 'NOW_PLAYING_UPDATE') {
-    room.lastNowPlaying = msg;
-  }
+function handleTelemetrySnapshot(room: RoomSession, msg: any) {
+  room.lastTelemetry = msg;
+  const metrics = msg.metrics || {};
+  const hr = metrics.heartRateBpm ?? '--';
+  const speed = metrics.speedMps != null ? Number(metrics.speedMps).toFixed(1) : '--';
+  console.log(
+    `🏃 [RELAY] Telemetría en "${room.token}" (#${msg.seq || '?'}) | Pulso: ${hr} ppm | Vel: ${speed} m/s | Espectadores: ${room.spectators.size}`,
+  );
+  broadcastToSpectators(room, JSON.stringify(msg));
+}
+
+function handleNowPlayingUpdate(room: RoomSession, msg: any) {
+  room.lastNowPlaying = msg;
+  const title = msg.track?.title || 'Sin título';
+  const artist = msg.track?.artist || 'Sin artista';
+  const state = msg.playback?.state || 'IDLE';
+  console.log(`🎵 [RELAY] Música en "${room.token}" | ${title} - ${artist} (${state})`);
   broadcastToSpectators(room, JSON.stringify(msg));
 }
 
@@ -121,10 +141,14 @@ const MESSAGE_HANDLERS: Record<
   PING: (ws) => ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() })),
   GATEWAY_REGISTER: (ws, room, _tracker, msg) => handleGatewayRegister(ws, room, msg),
   DISPATCH_CHEER: (ws, room, tracker, msg) => handleDispatchCheer(ws, room, tracker, msg),
-  TELEMETRY_SNAPSHOT: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
-  NOW_PLAYING_UPDATE: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
-  SESSION_STATE_CHANGED: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
-  CHEER_STATUS_UPDATE: (_ws, room, _tracker, msg) => handleBroadcastOrTelemetry(room, msg),
+  TELEMETRY_SNAPSHOT: (_ws, room, _tracker, msg) => handleTelemetrySnapshot(room, msg),
+  NOW_PLAYING_UPDATE: (_ws, room, _tracker, msg) => handleNowPlayingUpdate(room, msg),
+  SESSION_STATE_CHANGED: (_ws, room, _tracker, msg) => {
+    broadcastToSpectators(room, JSON.stringify(msg));
+  },
+  CHEER_STATUS_UPDATE: (_ws, room, _tracker, msg) => {
+    broadcastToSpectators(room, JSON.stringify(msg));
+  },
 };
 
 function handleSocketMessage(
@@ -146,6 +170,56 @@ function handleSocketMessage(
   }
 }
 
+function registerGatewayConnection(ws: WebSocket, room: RoomSession, token: string) {
+  if (room.gatewayWs && room.gatewayWs !== ws) {
+    try {
+      room.gatewayWs.close(1000, 'Replaced by new gateway connection');
+    } catch {
+      // Ignore
+    }
+  }
+  room.gatewayWs = ws;
+  console.log(`📡 [RELAY] Pasarela Android conectada en sesión "${token}"`);
+}
+
+function registerSpectatorConnection(
+  ws: WebSocket,
+  room: RoomSession,
+  token: string,
+  clientId: string,
+) {
+  const existingWs = room.spectators.get(clientId);
+  if (existingWs && existingWs !== ws) {
+    try {
+      existingWs.close(1000, 'Replaced by client reconnect');
+    } catch {
+      // Ignore
+    }
+  }
+  room.spectators.set(clientId, ws);
+  console.log(
+    `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
+  );
+  if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
+  if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
+}
+
+function handleSocketClose(ctx: SocketCloseContext) {
+  const { ws, room, rooms, token, role, clientId } = ctx;
+  if (role === 'gateway') {
+    if (room.gatewayWs === ws) room.gatewayWs = null;
+    console.log(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"`);
+  } else if (room.spectators.get(clientId) === ws) {
+    room.spectators.delete(clientId);
+    console.log(
+      `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})`,
+    );
+  }
+  if (!room.gatewayWs && room.spectators.size === 0) {
+    rooms.delete(token);
+  }
+}
+
 export function createRelayServer(wss: WebSocketServer) {
   const rooms = new Map<string, RoomSession>();
   const clientRateLimits = new WeakMap<WebSocket, RateLimitTracker>();
@@ -153,7 +227,7 @@ export function createRelayServer(wss: WebSocketServer) {
   function getOrCreateRoom(token: string): RoomSession {
     let room = rooms.get(token);
     if (!room) {
-      room = { token, gatewayWs: null, spectators: new Set() };
+      room = { token, gatewayWs: null, spectators: new Map() };
       rooms.set(token, room);
     }
     return room;
@@ -163,37 +237,21 @@ export function createRelayServer(wss: WebSocketServer) {
     const url = new URL(req.url || '', 'ws://localhost');
     const token = url.searchParams.get('token') || 'default';
     const role = url.searchParams.get('role') || 'spectator';
+    const clientId =
+      url.searchParams.get('clientId') || `spectator-${Math.random().toString(36).slice(2, 8)}`;
     const room = getOrCreateRoom(token);
 
     if (role === 'gateway') {
-      room.gatewayWs = ws;
-      console.log(`📡 [RELAY] Pasarela Android conectada en sesión "${token}"`);
+      registerGatewayConnection(ws, room, token);
     } else {
-      room.spectators.add(ws);
-      console.log(
-        `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
-      );
-      if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
-      if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
+      registerSpectatorConnection(ws, room, token, clientId);
     }
 
     const tracker: RateLimitTracker = { failedAttempts: 0, lockedUntil: 0 };
     clientRateLimits.set(ws, tracker);
 
     ws.on('message', (raw) => handleSocketMessage(ws, room, tracker, raw));
-
-    ws.on('close', () => {
-      if (role === 'gateway') {
-        if (room.gatewayWs === ws) room.gatewayWs = null;
-        console.log(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"`);
-      } else {
-        room.spectators.delete(ws);
-        console.log(
-          `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})`,
-        );
-      }
-      if (!room.gatewayWs && room.spectators.size === 0) rooms.delete(token);
-    });
+    ws.on('close', () => handleSocketClose({ ws, room, rooms, token, role, clientId }));
   });
 
   return { close: () => rooms.clear() };

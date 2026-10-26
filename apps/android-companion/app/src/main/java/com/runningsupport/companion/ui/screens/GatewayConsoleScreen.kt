@@ -2,7 +2,9 @@ package com.runningsupport.companion.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,9 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Headless Gateway Console Screen (Android 16)
- * IMPORTANT (FR-005): Displays ONLY service state, BLE link, cloud uplink, pending buffer, and spectator PIN.
- * EXPLICITLY displays ZERO running biometrics/metrics (no heart rate, pace, distance, or speed).
+ * Clean Gateway Console UI for Android Companion
+ * Material3 Styled following the Bento / Aurora Light palette
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +28,9 @@ fun GatewayConsoleScreen(
     isSimulationMode: Boolean,
     pendingBufferCount: Int,
     spectatorPin: String,
+    sessionName: String,
     serverUrl: String,
+    onSessionNameChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
     onToggleSimulationMode: (Boolean) -> Unit,
     onToggleService: (Boolean) -> Unit
@@ -48,6 +51,7 @@ fun GatewayConsoleScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(Color(0xFFF8FAFC))
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -117,6 +121,40 @@ fun GatewayConsoleScreen(
                     Switch(
                         checked = isSimulationMode,
                         onCheckedChange = onToggleSimulationMode
+                    )
+                }
+            }
+
+            // Session Name / Token Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "NOMBRE / TOKEN DE LA SESIÓN",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = sessionName,
+                        onValueChange = onSessionNameChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("carrera-victor") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "🌐 Panel Web: http://localhost:3000/session/${sessionName.ifEmpty { "carrera-victor" }}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0284C7)
                     )
                 }
             }
@@ -206,7 +244,8 @@ fun GatewayConsoleScreen(
                     ) {
                         Text("Garmin Fenix 7s (BLE)", fontSize = 14.sp, color = Color(0xFF334155))
                         val (garminText, garminColor) = when {
-                            isSimulationMode -> "SIMULADO (1 Hz)" to Color(0xFF16A34A)
+                            isServiceRunning && isSimulationMode -> "SIMULADO (1 Hz)" to Color(0xFF16A34A)
+                            isSimulationMode -> "SIMULACIÓN LISTA" to Color(0xFF0284C7)
                             isGarminConnected -> "CONECTADO" to Color(0xFF16A34A)
                             else -> "DESCONECTADO" to Color(0xFFDC2626)
                         }
@@ -237,13 +276,12 @@ fun GatewayConsoleScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Paquetes en Buffer Local (Room)", fontSize = 14.sp, color = Color(0xFF334155))
+                        Text("Buffer Local (Room)", fontSize = 14.sp, color = Color(0xFF334155))
                         Text(
-                            text = "$pendingBufferCount pts",
-                            fontSize = 14.sp,
-                            fontFamily = FontFamily.Monospace,
+                            text = "$pendingBufferCount pts pendientes",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (pendingBufferCount > 0) Color(0xFFEA580C) else Color(0xFF16A34A)
+                            color = if (pendingBufferCount > 0) Color(0xFFD97706) else Color(0xFF16A34A)
                         )
                     }
                 }

@@ -91,7 +91,12 @@ class WebSocketGatewayClient(
     }
 
     fun send(payload: JSONObject): Boolean {
-        return webSocket?.send(payload.toString()) ?: false
+        val jsonStr = payload.toString()
+        val sent = webSocket?.send(jsonStr) ?: false
+        if (!sent) {
+            Log.w(TAG, "Failed to send WebSocket payload: type=${payload.optString("type")}, isConnected=$isConnected")
+        }
+        return sent
     }
 
     fun sendNowPlayingUpdate(

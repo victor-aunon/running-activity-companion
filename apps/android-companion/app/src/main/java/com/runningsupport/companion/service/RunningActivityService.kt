@@ -102,7 +102,7 @@ class RunningActivityService : Service() {
             }
 
             garminManager?.setTelemetryListener { snapshot ->
-                client.send(snapshot)
+                gatewayClient?.send(snapshot) ?: false
             }
 
             setupSpotify(sessionId)
