@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
         sessionManager = SessionManager(this)
         db = AppDatabase.getDatabase(this)
 
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
         requestRequiredPermissions()
 
         setContent {
@@ -85,6 +87,11 @@ class MainActivity : ComponentActivity() {
             var isCloudConnected by remember { mutableStateOf(false) }
             var pendingBufferCount by remember { mutableStateOf(0) }
             var spectatorPin by remember { mutableStateOf("4829") }
+            var serverUrl by remember {
+                mutableStateOf(
+                    prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+                )
+            }
 
             val session = remember { sessionManager.getOrCreateSession() }
             spectatorPin = session.spectatorPin
@@ -103,10 +110,15 @@ class MainActivity : ComponentActivity() {
                 isCloudConnected = isCloudConnected,
                 pendingBufferCount = pendingBufferCount,
                 spectatorPin = spectatorPin,
+                serverUrl = serverUrl,
+                onServerUrlChange = { newUrl ->
+                    serverUrl = newUrl
+                    prefs.edit().putString(KEY_SERVER_URL, newUrl).apply()
+                },
                 onToggleService = { enabled ->
                     isServiceRunning = enabled
                     if (enabled) {
-                        startTrackingService(session)
+                        startTrackingService(session, serverUrl)
                         isCloudConnected = true
                     } else {
                         stopTrackingService()
@@ -132,10 +144,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startTrackingService(session: ActiveSessionState) {
+    private fun startTrackingService(session: ActiveSessionState, serverUrl: String) {
         val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
             putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
             putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
+            putExtra(RunningActivityService.EXTRA_SERVER_URL, serverUrl)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -147,5 +160,11 @@ class MainActivity : ComponentActivity() {
     private fun stopTrackingService() {
         val serviceIntent = Intent(this, RunningActivityService::class.java)
         stopService(serviceIntent)
+    }
+
+    companion object {
+        private const val PREFS_NAME = "gateway_prefs"
+        private const val KEY_SERVER_URL = "server_url"
+        private const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
     }
 }

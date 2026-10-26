@@ -37,7 +37,7 @@ class RunningActivityService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val serverUrl = intent?.getStringExtra(EXTRA_SERVER_URL) ?: "ws://localhost:3000/api/ws/session"
+        val serverUrl = intent?.getStringExtra(EXTRA_SERVER_URL) ?: DEFAULT_SERVER_URL
         val token = intent?.getStringExtra(EXTRA_TOKEN) ?: "default-token"
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: "default-session"
         activeSessionId = sessionId
@@ -151,6 +151,7 @@ class RunningActivityService : Service() {
         const val EXTRA_SERVER_URL = "extra_server_url"
         const val EXTRA_TOKEN = "extra_token"
         const val EXTRA_SESSION_ID = "extra_session_id"
+        const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
     }
 }

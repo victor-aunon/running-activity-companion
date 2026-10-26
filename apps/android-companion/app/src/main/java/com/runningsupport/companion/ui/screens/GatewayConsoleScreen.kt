@@ -26,6 +26,8 @@ fun GatewayConsoleScreen(
     isCloudConnected: Boolean,
     pendingBufferCount: Int,
     spectatorPin: String,
+    serverUrl: String,
+    onServerUrlChange: (String) -> Unit,
     onToggleService: (Boolean) -> Unit
 ) {
     Scaffold(
@@ -103,6 +105,33 @@ fun GatewayConsoleScreen(
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = FontFamily.Monospace,
                         color = Color(0xFFEA580C)
+                    )
+                }
+            }
+
+            // Relay Server URL Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "SERVIDOR RELAY WEBSOCKET",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = onServerUrlChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("ws://10.0.2.2:3001/api/ws/session") }
                     )
                 }
             }

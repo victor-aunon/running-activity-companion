@@ -1,6 +1,6 @@
 # Real-Time Running Activity Support System
 
-Sistema distribuido de soporte y telemetría en tiempo real para corredores de fondo durante entrenamientos y competiciones, con pasarela BLE, sincronización por WebSockets y dashboard para espectadores.
+Sistema distribuido de telemetría y soporte en tiempo real para corredores de fondo durante entrenamientos y competiciones, con enlace BLE desde reloj Garmin, pasarela móvil Android 16 (con soporte de Spotify en vivo), servidor relay por WebSockets y dashboard web Bento Box para espectadores.
 
 ---
 
@@ -10,7 +10,7 @@ Sistema distribuido de soporte y telemetría en tiempo real para corredores de f
 [ Garmin Fenix 7S ] 
        │  (Bluetooth Low Energy - BLE 1 Hz)
        ▼
-[ Android Companion Gateway ]
+[ Android Companion Gateway ]  ◀─── [ Spotify Android (Música en Vivo) ]
        │  (WebSockets - TLS / JSON Contracts)
        ▼
 [ WebSocket Relay Server ]
@@ -19,158 +19,204 @@ Sistema distribuido de soporte y telemetría en tiempo real para corredores de f
 [ Web Spectator Dashboard (Next.js Bento Box) ]
 ```
 
-1. **Garmin Fenix 7S (`apps/garmin-fenix7s`):** Connect IQ Data Field para la actividad nativa "Carrera". Emite telemetría (FC, ritmo, distancia, cadencia) por BLE y muestra avisos de ánimo sobreimpresos sin interrumpir las métricas de carrera.
-2. **Android Companion Gateway (`apps/android-companion`):** Servicio Android (API 28-36) en primer plano. Actúa de puente transparente entre el reloj (BLE) y la nube (WebSockets). Incluye base de datos local SQLite (Room) para buffer sin conexión y genera el PIN de 4 dígitos de la sesión.
-3. **Web Spectator Dashboard (`apps/web-dashboard`):** Dashboard web reactivo en Next.js (App Router, Tailwind CSS, Leaflet) con diseño *Aurora Bento Box Light Mode*. Permite a familiares y amigos seguir al corredor en vivo y enviarle ánimos.
-4. **Contratos Compartidos (`packages/shared-contracts`):** Definiciones de esquemas JSON y tipos TypeScript para la telemetría y los comandos de animación.
+1. **Garmin Fenix 7S (`apps/garmin-fenix7s`):** Connect IQ Data Field para la actividad nativa "Carrera". Emite telemetría por BLE a 1 Hz y muestra avisos de ánimo sobreimpresos sin interrumpir las métricas de carrera.
+2. **Android Companion Gateway (`apps/android-companion`):** Servicio Android en primer plano. Actúa de puente transparente entre el reloj (BLE) y la nube (WebSockets), detecta la música activa de Spotify y almacena datos sin conexión (Room SQLite).
+3. **Web Spectator Dashboard (`apps/web-dashboard`):** Dashboard web reactivo en Next.js (App Router, Tailwind CSS, Leaflet) con diseño *Aurora Bento Box Light Mode*. Incluye reproductor de Spotify en vivo y muro de ánimo interactivo.
+4. **Contratos Compartidos (`packages/shared-contracts`):** Esquemas JSON y tipos TypeScript para telemetría, notificaciones y Now Playing.
 
 ---
 
-## 🌐 1. Web Dashboard & Botón "Acceso Rápido"
+## ❓ Preguntas Frecuentes de Configuración
 
-### ¿Qué significa el botón "Acceso Rápido"?
-En la pantalla de bienvenida (`http://localhost:3000`), el formulario principal solicita un **Token de Sesión** y un **PIN de 4 dígitos**. 
-* El botón **"Acceso Rápido" (Demo / Carrera en Vivo)** es un atajo directo diseñado para pruebas, demostraciones o familiares con enlace directo: permite entrar a la visualización en vivo de la carrera (`/session/live-session` o `/session/live-demo`) con un solo clic, sin necesidad de teclear credenciales manualmente.
+### ¿Tengo que modificar archivos de código en Android o en Garmin?
+**ROTUNDAMENTE NO.**
+* **En Garmin (`apps/garmin-fenix7s`)**: El código ya viene 100% configurado con los UUIDs de BLE estándar de Nordic/Running Support. Solo necesitas compilarlo con tu clave `.der`.
+* **En Android (`apps/android-companion`)**: **No necesitas tocar ningún archivo.** La URL del servidor WebSocket (sea tu servidor en la nube `wss://...` o tu IP local en Wi-Fi) **se introduce directamente en la pantalla de la app** en el campo *"SERVIDOR RELAY WEBSOCKET"*. La app la recuerda automáticamente mediante preferencias locales.
 
-### Puesta en Marcha:
+---
+
+## 🔑 Cómo Generar la Clave `.der` de Garmin (Developer Key)
+
+El compilador de Garmin (`monkeyc`) requiere una clave privada RSA en formato DER para firmar criptográficamente el binario `.prg`. Tienes dos formas muy sencillas de generarla:
+
+### Opción A: Desde Visual Studio Code (Recomendado, 2 clics)
+1. Abre VS Code e instala la extensión oficial **Monkey C** (de Garmin).
+2. Abre la paleta de comandos: `Cmd + Shift + P` (macOS) o `Ctrl + Shift + P` (Windows/Linux).
+3. Escribe y selecciona: **`Monkey C: Generate a Developer Key`**.
+4. Selecciona la carpeta donde deseas guardarla (por ejemplo en tu directorio de usuario o en la raíz del proyecto) y nómbrala `developer_key.der`.
+5. ¡Listo! Ya tienes tu clave válida para siempre.
+
+### Opción B: Desde la Terminal con OpenSSL (1 solo comando)
+Ejecuta en tu terminal:
 ```bash
-# 1. Instalar dependencias del monorepo
+# 1. Generar clave privada RSA de 4096 bits
+openssl genrsa -out developer_key.pem 4096
+
+# 2. Convertir al formato DER (PKCS#8) que exige Garmin
+openssl pkcs8 -topk8 -inform PEM -outform DER -in developer_key.pem -out developer_key.der -nocrypt
+
+# 3. Eliminar el archivo intermedio PEM (opcional)
+rm developer_key.pem
+```
+Guarda tu `developer_key.der` en un lugar seguro (por ejemplo, en `~/.garmin/developer_key.der`).
+
+---
+
+## ⌚ 1. Guía Paso a Paso: App de Reloj Garmin (`apps/garmin-fenix7s`)
+
+La aplicación es un **Data Field de Connect IQ** (`Toybox.WatchUi.DataField`) para la actividad nativa "Carrera".
+
+### Prerrequisitos:
+* **Garmin Connect IQ SDK** instalado y en el PATH (`connectiq`, `monkeyc`).
+* Tu archivo `developer_key.der`.
+
+### Paso 1: Compilar el binario para tu reloj
+Desde la raíz del repositorio:
+```bash
+cd apps/garmin-fenix7s
+
+# Compilar para Garmin Fenix 7S
+monkeyc -d fenix7s -f monkey.jungle -o bin/RunningSupport.prg -y /ruta/a/developer_key.der
+```
+*(Nota: Si usas Fenix 7 estándar o Fenix 7 Pro, cambia `-d fenix7s` por `-d fenix7` o `-d fenix7spro`)*.
+
+### Paso 2: Instalar en el Reloj Físico
+1. Conecta tu reloj Garmin al ordenador con el cable USB.
+2. El reloj se montará como unidad de almacenamiento masivo USB (en macOS utiliza herramientas como *OpenMTP* o *Android File Transfer* si el sistema no lo monta directamente).
+3. Copia el archivo generado `bin/RunningSupport.prg` a la carpeta:
+   ```text
+   GARMIN/APPS/RunningSupport.prg
+   ```
+4. Expulsa la unidad USB y desconecta el cable.
+
+### Paso 3: Activar en el Reloj
+1. En el reloj, pulsa **START** y selecciona la actividad **Carrera** (Run).
+2. Mantén pulsado el botón central izquierdo (**UP / MENU**) $\rightarrow$ selecciona **Configuración de Carrera**.
+3. Entra en **Pantallas de Datos**.
+4. Selecciona una pantalla para editar (o añade una nueva) $\rightarrow$ entra en **Campos de Connect IQ** $\rightarrow$ selecciona **Running Activity Support**.
+5. ¡Listo! En cuanto inicies la actividad, el Data Field empezará a emitir telemetría por BLE.
+
+---
+
+## 📱 2. Guía Paso a Paso: App Android Companion (`apps/android-companion`)
+
+Actúa como pasarela headless (sin gastar batería en renderizar métricas) entre el reloj y la nube.
+
+### Prerrequisitos:
+* **Android Studio** instalado (o Android SDK con `adb`).
+* Un teléfono físico Android con Bluetooth y conexión de datos móviles.
+
+### Paso 1: Compilar la APK
+Desde la terminal:
+```bash
+cd apps/android-companion
+
+# Dar permisos de ejecución al wrapper de Gradle (si es necesario)
+chmod +x gradlew
+
+# Compilar APK de depuración
+./gradlew assembleDebug
+```
+El archivo APK resultante se generará en:  
+`apps/android-companion/app/build/outputs/apk/debug/app-debug.apk`
+
+### Paso 2: Instalar la APK en tu teléfono
+* **Vía ADB (por cable USB o Wi-Fi)**:
+  ```bash
+  adb install -r app/build/outputs/apk/debug/app-debug.apk
+  ```
+* **Vía Android Studio**: Abre la carpeta `apps/android-companion` en Android Studio y pulsa **Run 'app'** (`Shift + F10`).
+* **Vía archivo directo**: Puedes enviarte el `.apk` a tu teléfono (Telegram, Google Drive, WhatsApp) e instalarlo directamente en Android.
+
+### Paso 3: Configurar y Arrancar en el Teléfono
+1. Abre la aplicación **Running Support Gateway** en tu teléfono.
+2. Concede los permisos que te solicite (Dispositivos cercanos / Bluetooth y Notificaciones).
+3. **Configura la URL de tu Servidor**:
+   * En el campo **"SERVIDOR RELAY WEBSOCKET"**, escribe la URL de tu servidor:
+     - **En pruebas locales (mismo Wi-Fi)**: `ws://192.168.1.XX:3001/api/ws/session` (la IP local de tu ordenador).
+     - **En emulador Android**: `ws://10.0.2.2:3001/api/ws/session`.
+     - **En producción (desplegado en internet)**: `wss://tudominio.com/api/ws/session`.
+4. Enciende el interruptor **"Servicio en Primer Plano"**:
+   * La app conectará por BLE con tu reloj y abrirá el socket con tu servidor.
+   * La app mostrará en grande el **PIN DE ACCESO ESPECTADORES** (ej: `4829`) para que se lo des a tus seguidores.
+   * Si escuchas Spotify en el móvil, la app detectará la música y la transmitirá automáticamente al dashboard.
+
+---
+
+## 🌐 3. Guía: Web Dashboard & Servidor Relay (`apps/web-dashboard`)
+
+### Variables de Entorno Web (`.env.local` en `apps/web-dashboard/`):
+Copia `.env.example` a `.env.local` y ajusta según tu entorno:
+
+```ini
+# Nombre mostrado en la cabecera del dashboard
+NEXT_PUBLIC_ATHLETE_NAME="Víctor"
+
+# Localidad del evento
+NEXT_PUBLIC_DEFAULT_LOCALITY="Madrid"
+
+# Endpoint de conexión WebSocket para los espectadores
+NEXT_PUBLIC_WS_URL="ws://localhost:3001/api/ws/session"
+
+# Puerto HTTP del frontend Next.js
+PORT=3000
+```
+*(En producción con SSL, cambia `NEXT_PUBLIC_WS_URL` por `wss://tudominio.com/api/ws/session`)*.
+
+### Puesta en Marcha en Desarrollo:
+```bash
+# 1. Instalar dependencias
 pnpm install
 
-# 2. Iniciar el servidor web Next.js (puerto 3000)
+# 2. Iniciar el frontend Next.js (puerto 3000)
 pnpm --filter web-dashboard dev
 
-# 3. En otra terminal, iniciar el servidor WebSocket Relay (puerto 3001)
+# 3. En otra terminal, iniciar el relay WebSocket (puerto 3001)
 pnpm --filter web-dashboard relay
 ```
-Abre tu navegador en `http://localhost:3000`.
+Abre en tu navegador `http://localhost:3000`.
 
-### Simulación de Corredor Virtual (Sin Reloj ni Móvil):
-Una vez que el servidor Relay esté activo en el puerto 3001, puedes iniciar el simulador de corredor:
+### Despliegue en Producción (Docker / Dokploy / VPS):
+El proyecto incluye un `Dockerfile` multi-stage optimizado que ejecuta el servidor unificado (`server.mjs`) en el puerto 3000 (manejando tanto el frontend Next.js como el endpoint WebSocket `/api/ws/session` en el mismo puerto):
 ```bash
-# Ejecutar el simulador de corredor (se conecta automáticamente al relay en puerto 3001)
-pnpm --filter web-dashboard simulate:runner -- --token=live-session --pin=4829
+# Construir imagen Docker
+docker build -t running-activity-support .
+
+# Ejecutar contenedor
+docker run -d -p 3000:3000 \
+  -e NEXT_PUBLIC_ATHLETE_NAME="Víctor" \
+  -e NEXT_PUBLIC_WS_URL="wss://tudominio.com/api/ws/session" \
+  running-activity-support
 ```
-* Emite telemetría GPS, pulso y ritmo a 1 Hz recorriendo un trayecto real de Madrid.
-* El dashboard web (`/session/live-session`) reflejará de inmediato las métricas en directo.
-* Al pulsar `r` o `Enter` en la terminal del simulador, se simula que el corredor pulsa el botón del reloj para agradecer un mensaje recibido.
 
 ---
 
-## ⌚ 2. Aplicación de Reloj: Garmin Fenix 7S (`apps/garmin-fenix7s`)
+## 🏃 4. Pruebas Rápidas con Simulador (Sin Reloj ni Teléfono)
 
-La aplicación es un **Data Field de Connect IQ** (`Toybox.WatchUi.DataField`) escrito en Monkey C.
+Si quieres probar todo el sistema en tu ordenador sin necesidad del reloj ni del teléfono:
 
-### Requisitos:
-* **Garmin Connect IQ SDK** (descargar desde [developer.garmin.com/connect-iq](https://developer.garmin.com/connect-iq/sdk/)).
-* Extensión **Monkey C** para VS Code o línea de comandos con Java 17+.
-* Clave de desarrollador (`developer_key.der`).
-
-### Ejecución en el Simulador Oficial de Garmin:
-1. Inicia el simulador de Garmin:
+1. Inicia el servidor relay:
    ```bash
-   connectiq
+   pnpm --filter web-dashboard relay
    ```
-2. Compila el proyecto para el Fenix 7S:
+2. Inicia el simulador de corredor:
    ```bash
-   cd apps/garmin-fenix7s
-   monkeyc -d fenix7s -f monkey.jungle -o bin/RunningSupport.prg -y /ruta/a/developer_key.der
+   pnpm --filter web-dashboard simulate:runner -- --token=live-session --pin=4829
    ```
-3. Ejecuta el archivo compilado en el simulador.
-4. En el menú del simulador, ve a **Simulation $\rightarrow$ Fit Data $\rightarrow$ Simulate Data** para inyectar pulso y velocidad simulados.
-
-### Instalación en Reloj Físico (Garmin Fenix 7S):
-1. Conecta el reloj Garmin Fenix 7S a tu ordenador mediante el cable USB.
-2. El reloj aparecerá como unidad de almacenamiento masivo USB (en macOS puede requerir *Android File Transfer* u *OpenMTP*).
-3. Compila el archivo ejecutable (`.prg`):
+3. En otra terminal, emite música en vivo simulada de Spotify:
    ```bash
-   monkeyc -d fenix7s -f monkey.jungle -o bin/RunningSupport.prg -y /ruta/a/developer_key.der
+   pnpm --filter web-dashboard simulate:now-playing -- --title="The Pretender" --artist="Foo Fighters" --state=PLAYING
    ```
-4. Copia el archivo `RunningSupport.prg` en la carpeta **`GARMIN/APPS/`** de la memoria interna del reloj.
-5. Desconecta el reloj del cable USB de forma segura.
-6. **Activación en el reloj:**
-   * En el reloj, pulsa **START** y selecciona la actividad **Carrera** (Run).
-   * Mantén pulsado el botón central izquierdo (**UP / MENU**) $\rightarrow$ selecciona **Configuración de Carrera**.
-   * Entra en **Pantallas de Datos**.
-   * Edita una pantalla existente o añade una nueva $\rightarrow$ selecciona el campo que deseas $\rightarrow$ entra en **Campos de Connect IQ** $\rightarrow$ elige **Running Activity Support**.
+4. Entra a `http://localhost:3000` y haz clic en **"Acceso Rápido (Carrera en Vivo)"** o accede a `http://localhost:3000/session/live-session`. Verás la telemetría en tiempo real sobre el mapa de Madrid y el reproductor de Spotify activo sobre el muro de ánimo.
 
 ---
 
-## 📱 3. Aplicación Android Companion Gateway (`apps/android-companion`)
-
-La app Android actúa como pasarela headless (sin métricas en pantalla para no duplicar datos) y servicio en segundo plano.
-
-### Requisitos:
-* **Android Studio** (Ladybug o posterior) con Android SDK 34/36.
-* Dispositivo físico o emulador con soporte de **Bluetooth Low Energy (BLE)**.
-
-### Compilación e Instalación:
-1. Compila el APK de depuración desde la terminal:
-   ```bash
-   cd apps/android-companion
-   ./gradlew assembleDebug
-   ```
-2. Instala el APK en el dispositivo conectado por USB (con Depuración USB activa):
-   ```bash
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
-3. Alternativamente, abre la carpeta `apps/android-companion` directamente en Android Studio y pulsa **Run 'app'** (`Shift + F10`).
-
-### Configuración en el Dispositivo:
-1. Abre la aplicación **Running Companion Gateway**.
-2. Concede los permisos requeridos cuando se soliciten:
-   * **Dispositivos cercanos** (`BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`).
-   * **Notificaciones** (`POST_NOTIFICATIONS`).
-3. Activa el interruptor **SERVICIO ACTIVO**:
-   * Se iniciará el Foreground Service de Android.
-   * La app buscará por BLE el reloj Garmin Fenix 7S y abrirá la conexión WebSocket con el servidor relay.
-   * En pantalla verás el **PIN de 4 dígitos** asignado a la sesión para compartir con los espectadores.
-4. **Modo de Prueba / Sin Reloj:** Si no tienes el reloj a mano, puedes activar el interruptor de *Modo Simulación* dentro de la app para que genere telemetría local de prueba y verifique la pasarela.
-
----
-
-## 🧪 4. Pruebas y Control de Calidad
+## 🧪 5. Control de Calidad y Tests
 
 ```bash
-# Ejecutar suite de pruebas unitarias y de contratos
+# Ejecutar suite de pruebas (unitarias, contratos y schemas)
 pnpm --filter web-dashboard test
 
-# Ejecutar el Quality Gate determinista (Airbnb linter, oxlint, tipos TypeScript y complejidad)
+# Ejecutar el Quality Gate determinista (Airbnb linter, Oxlint, tipos estrictos y complejidad)
 bash .specify/scripts/bash/check-quality-gate.sh
-
-# Ejecutar auditoría visual de Playwright (Bento Box fidelidad Stitch e interacciones)
-bash .specify/scripts/bash/verify-stitch-design.sh
 ```
-
----
-
-## ⚙️ 5. Variables de Entorno y Configuración por Plataforma
-
-Cada una de las tres aplicaciones pertenece a un ecosistema tecnológico distinto con su propio modelo estándar de configuración:
-
-### 1. Web Dashboard (`apps/web-dashboard` - Next.js)
-Usa archivos **`.env.local`** (o `.env`). En Next.js, cualquier variable consumida en el navegador cliente **debe** llevar el prefijo `NEXT_PUBLIC_`:
-
-| Variable | Por Defecto | Descripción |
-|---|---|---|
-| `NEXT_PUBLIC_ATHLETE_NAME` | `"Víctor"` | Nombre del corredor mostrado en la cabecera y modal. |
-| `NEXT_PUBLIC_DEFAULT_LOCALITY` | `"Alicante"` | Localidad de carrera mostrada en el header. |
-| `NEXT_PUBLIC_WS_URL` | `"ws://localhost:3001/api/ws/session"` | Endpoint del servidor WebSocket Relay. |
-| `PORT` | `3000` | Puerto HTTP del servidor web Next.js. |
-| `NEXT_PUBLIC_ZONE_1_MAX` a `_5_MAX` | `130, 145, 160, 175, 195` | Umbrales superiores de frecuencia cardíaca (BPM). |
-| `NEXT_PUBLIC_CADENCE_LOW_MAX` | `155` | Límite superior de Cadencia Baja / Calentamiento (SPM). |
-| `NEXT_PUBLIC_CADENCE_MODERATE_MAX` | `169` | Límite superior de Cadencia Moderada (SPM). |
-| `NEXT_PUBLIC_CADENCE_OPTIMAL_MAX` | `185` | Límite superior de Rango Óptimo Eficiente (SPM). Por encima es Cadencia Alta. |
-
-### 2. Android Companion Gateway (`apps/android-companion` - Kotlin / Gradle)
-En Android **no** se usan archivos `.env` (sería un antipatrón en Java/Kotlin). La configuración se divide en:
-* **`local.properties`** (en la raíz de `apps/android-companion/`): Define la ruta local del SDK de Android (`sdk.dir=/Users/.../Android/sdk`). Se genera automáticamente por Android Studio y **no** se commitea a Git.
-* **`buildConfigField` en `build.gradle.kts`**: Para constantes inyectadas en tiempo de compilación (ej. endpoints base o versión del protocolo).
-* **Recursos XML (`res/values/strings.xml`)**: Para nombres de la aplicación, identificadores de canales de notificación y constantes de UI.
-* **Ajustes de la App (Shared Preferences)**: La app dispone de campos en pantalla para configurar la URL del servidor WebSocket relay y activar el interruptor de simulación.
-
-### 3. Garmin Fenix 7S (`apps/garmin-fenix7s` - Connect IQ / Monkey C)
-El reloj es un dispositivo embebido sin variables de entorno de sistema operativo. Su configuración se realiza mediante:
-* **Connect IQ App Settings (`resources/settings/properties.xml` y `settings.xml`)**: Es el estándar oficial de Garmin. Permite que el corredor configure parámetros de la app (como el UUID del servicio BLE de transmisión) directamente desde su smartphone a través de la app oficial **Garmin Connect Mobile** o en el ordenador con **Garmin Express**.
-* **`monkey.jungle`**: Archivo de configuración del compilador Connect IQ que define el dispositivo destino (`fenix7s`), flags de compilación y rutas de recursos.
-* **`developer_key.der`**: Clave criptográfica RSA privada del desarrollador utilizada por `monkeyc` para firmar el binario compilado `.prg`.
