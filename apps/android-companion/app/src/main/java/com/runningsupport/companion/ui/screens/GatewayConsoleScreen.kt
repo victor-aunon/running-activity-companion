@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runningsupport.companion.garmin.GarminDiagnostics
 
 /**
  * Clean Gateway Console UI for Android Companion
@@ -30,6 +31,8 @@ fun GatewayConsoleScreen(
     spectatorPin: String,
     sessionName: String,
     serverUrl: String,
+    garminDiagnostics: GarminDiagnostics = GarminDiagnostics(),
+    onSendTestPing: () -> Unit = {},
     onSessionNameChange: (String) -> Unit,
     onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
@@ -150,13 +153,6 @@ fun GatewayConsoleScreen(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("carrera-victor") }
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "🌐 Panel Web: http://localhost:3000/session/${sessionName.ifEmpty { "carrera-victor" }}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0284C7)
-                    )
                 }
             }
 
@@ -250,10 +246,12 @@ fun GatewayConsoleScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Garmin Fenix 7s (BLE)", fontSize = 14.sp, color = Color(0xFF334155))
+                        Text("Enlace Garmin BLE / GCM", fontSize = 14.sp, color = Color(0xFF334155))
                         val (garminText, garminColor) = when {
-                            isServiceRunning && isSimulationMode -> "SIMULADO (1 Hz)" to Color(0xFF16A34A)
+                            isServiceRunning && isSimulationMode -> "SIMULADO" to Color(0xFF16A34A)
                             isSimulationMode -> "SIMULACIÓN LISTA" to Color(0xFF0284C7)
+                            garminDiagnostics.isDeviceConnected ->
+                                (garminDiagnostics.deviceName?.let { "CONECTADO ($it)" } ?: "CONECTADO") to Color(0xFF16A34A)
                             isGarminConnected -> "CONECTADO" to Color(0xFF16A34A)
                             else -> "DESCONECTADO" to Color(0xFFDC2626)
                         }
@@ -262,6 +260,27 @@ fun GatewayConsoleScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = garminColor
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Pantalla de Datos (1 Hz)", fontSize = 14.sp, color = Color(0xFF334155))
+                        val (streamText, streamColor) = when {
+                            isServiceRunning && isSimulationMode -> "EMITIENDO (1 Hz)" to Color(0xFF16A34A)
+                            garminDiagnostics.packetsReceivedCount > 0 ->
+                                "RECIBIENDO (${garminDiagnostics.packetsReceivedCount} pts)" to Color(0xFF16A34A)
+                            isServiceRunning && garminDiagnostics.isDeviceConnected ->
+                                "ESPERANDO ACTIVIDAD" to Color(0xFFD97706)
+                            else -> "INACTIVO" to Color(0xFF64748B)
+                        }
+                        Text(
+                            text = streamText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = streamColor
                         )
                     }
 
@@ -291,6 +310,131 @@ fun GatewayConsoleScreen(
                             fontWeight = FontWeight.Bold,
                             color = if (pendingBufferCount > 0) Color(0xFFD97706) else Color(0xFF16A34A)
                         )
+                    }
+                }
+            }
+
+            // Panel de Diagnóstico Garmin Connect IQ
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "DIAGNÓSTICO GARMIN CONNECT IQ",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Estado SDK", fontSize = 13.sp, color = Color(0xFF475569))
+                        Text(
+                            garminDiagnostics.sdkStatus,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (garminDiagnostics.sdkStatus.contains("Listo") || garminDiagnostics.sdkStatus.contains("Simulación")) Color(0xFF16A34A) else Color(0xFF64748B)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Reloj Detectado", fontSize = 13.sp, color = Color(0xFF475569))
+                        Text(
+                            garminDiagnostics.deviceName ?: "Ninguno",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (garminDiagnostics.deviceName != null) Color(0xFF0F172A) else Color(0xFF94A3B8)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("App DataField Registrada", fontSize = 13.sp, color = Color(0xFF475569))
+                        Text(
+                            if (garminDiagnostics.isAppRegistered) "SÍ (UUID OK)" else "NO",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (garminDiagnostics.isAppRegistered) Color(0xFF16A34A) else Color(0xFFDC2626)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Telemetría Recibida", fontSize = 13.sp, color = Color(0xFF475569))
+                        val hrText = if (garminDiagnostics.lastHeartRate > 0) " (${garminDiagnostics.lastHeartRate} bpm)" else ""
+                        Text(
+                            "${garminDiagnostics.packetsReceivedCount} paquetes$hrText",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (garminDiagnostics.packetsReceivedCount > 0) Color(0xFF16A34A) else Color(0xFF64748B)
+                        )
+                    }
+
+                    if (garminDiagnostics.lastTestResult != null) {
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = garminDiagnostics.lastTestResult ?: "",
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(10.dp),
+                                color = if (garminDiagnostics.lastTestResult?.startsWith("✓") == true) Color(0xFF16A34A) else Color(0xFFDC2626)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = onSendTestPing,
+                        enabled = isServiceRunning,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Probar Conexión con Reloj (Test Ping)")
+                    }
+
+                    if (garminDiagnostics.logs.isNotEmpty()) {
+                        Text(
+                            text = "ÚLTIMOS EVENTOS GARMIN:",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF0F172A), RoundedCornerShape(6.dp))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            garminDiagnostics.logs.take(5).forEach { logLine ->
+                                Text(
+                                    text = logLine,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFE2E8F0)
+                                )
+                            }
+                        }
                     }
                 }
             }

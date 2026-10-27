@@ -38,11 +38,18 @@ class RunningActivityService : Service() {
     override fun onCreate() {
         super.onCreate()
         startForegroundServiceNotification()
+        activeInstance = this
         try {
             db = AppDatabase.getDatabase(this)
-            garminManager = GarminDataFieldManager(this, serviceScope)
-            garminManager?.setConnectionStateListener { isConnected ->
+            val mgr = GarminDataFieldManager(this, serviceScope)
+            garminManager = mgr
+            mgr.setConnectionStateListener { isConnected ->
                 _isGarminConnectedState.value = isConnected
+            }
+            serviceScope.launch {
+                mgr.diagnosticsState.collect { diag ->
+                    _garminDiagnosticsState.value = diag
+                }
             }
             acquireWakeLock()
         } catch (e: Exception) {
@@ -237,6 +244,9 @@ class RunningActivityService : Service() {
     }
 
     override fun onDestroy() {
+        if (activeInstance == this) {
+            activeInstance = null
+        }
         serviceJob.cancel()
         garminManager?.stop()
         garminManager = null
@@ -291,6 +301,8 @@ class RunningActivityService : Service() {
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
 
+        private var activeInstance: RunningActivityService? = null
+
         private val _isServiceRunningState = MutableStateFlow(false)
         val isServiceRunningState = _isServiceRunningState.asStateFlow()
 
@@ -299,5 +311,17 @@ class RunningActivityService : Service() {
 
         private val _isGarminConnectedState = MutableStateFlow(false)
         val isGarminConnectedState = _isGarminConnectedState.asStateFlow()
+
+        private val _garminDiagnosticsState = MutableStateFlow(com.runningsupport.companion.garmin.GarminDiagnostics())
+        val garminDiagnosticsState = _garminDiagnosticsState.asStateFlow()
+
+        fun sendGarminTestPing(onResult: (String) -> Unit) {
+            val mgr = activeInstance?.garminManager
+            if (mgr != null) {
+                mgr.sendTestPingToWatch(onResult)
+            } else {
+                onResult("El servicio en segundo plano debe estar activo para probar la conexión con el reloj.")
+            }
+        }
     }
 }

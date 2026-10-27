@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -80,6 +81,7 @@ class MainActivity : ComponentActivity() {
             val isServiceRunning by RunningActivityService.isServiceRunningState.collectAsState()
             val isCloudConnected by RunningActivityService.isCloudConnectedState.collectAsState()
             val isGarminConnected by RunningActivityService.isGarminConnectedState.collectAsState()
+            val garminDiagnostics by RunningActivityService.garminDiagnosticsState.collectAsState()
             var isSimulationMode by remember { mutableStateOf(false) }
 
             var pendingBufferCount by remember { mutableStateOf(0) }
@@ -130,6 +132,12 @@ class MainActivity : ComponentActivity() {
                 spectatorPin = spectatorPin,
                 sessionName = sessionName,
                 serverUrl = serverUrl,
+                garminDiagnostics = garminDiagnostics,
+                onSendTestPing = {
+                    RunningActivityService.sendGarminTestPing { result ->
+                        Toast.makeText(this@MainActivity, result, Toast.LENGTH_LONG).show()
+                    }
+                },
                 onSessionNameChange = { newName ->
                     val clean = newName.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "-")
                     sessionName = clean
