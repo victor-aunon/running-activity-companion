@@ -190,4 +190,38 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
 
     wsGateway.close();
   });
+
+  await t.test('Relay persists SESSION_STATE_CHANGED COMPLETED state and replays to late spectators', async () => {
+    const { ws: wsGateway } = await registerGateway(port, 'token-completed', '1234');
+
+    wsGateway.send(
+      JSON.stringify({
+        type: 'SESSION_STATE_CHANGED',
+        sessionId: 'token-completed',
+        status: 'COMPLETED',
+        timestamp: Date.now(),
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const wsSpectator = new WebSocket(
+      `ws://localhost:${port}/api/ws/session?token=token-completed&role=spectator&pin=1234`,
+    );
+
+    const receivedState = await new Promise<any>((resolve) => {
+      wsSpectator.on('message', (data) => {
+        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+        const msg = JSON.parse(text);
+        if (msg.type === 'SESSION_STATE_CHANGED') {
+          resolve(msg);
+        }
+      });
+    });
+
+    assert.equal(receivedState.status, 'COMPLETED');
+
+    wsGateway.close();
+    wsSpectator.close();
+  });
 });

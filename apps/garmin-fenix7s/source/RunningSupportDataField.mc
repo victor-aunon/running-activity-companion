@@ -40,6 +40,18 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
     }
 
+    // Se invoca cuando el usuario guarda o descarta la actividad en el reloj (Fin de Carrera)
+    function onTimerReset() as Void {
+        if (transmitter != null) {
+            var payload = {
+                "type" => "SESSION_STATE_CHANGED",
+                "status" => "COMPLETED",
+                "timestamp" => Time.now().value().toLong() * 1000L
+            };
+            transmitter.transmit(payload);
+        }
+    }
+
     hidden function checkServiceEnabled() as Void {
         try {
             var val = Application.Properties.getValue("ServiceEnabled");

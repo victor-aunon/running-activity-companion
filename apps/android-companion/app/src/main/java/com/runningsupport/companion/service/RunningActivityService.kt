@@ -112,7 +112,20 @@ class RunningActivityService : Service() {
             }
 
             garminManager?.setTelemetryListener { snapshot ->
-                gatewayClient?.send(snapshot) ?: false
+                val type = snapshot.optString("type")
+                if (type == "SESSION_STATE_CHANGED") {
+                    serviceScope.launch {
+                        try {
+                            db.cheerDao().expireInFlightCheersOnSessionCompleted(sessionId)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error expirando ánimos: ${e.message}")
+                        }
+                        gatewayClient?.send(snapshot)
+                    }
+                    true
+                } else {
+                    gatewayClient?.send(snapshot) ?: false
+                }
             }
 
             setupSpotify(sessionId)
@@ -190,17 +203,22 @@ class RunningActivityService : Service() {
     }
 
     fun onSessionCompleted() {
-        activeSessionId?.let { sId ->
-            serviceScope.launch {
-                val completeEvent = JSONObject().apply {
-                    put("type", "SESSION_STATE_CHANGED")
-                    put("sessionId", sId)
-                    put("status", "COMPLETED")
-                    put("timestamp", System.currentTimeMillis())
-                }
-                gatewayClient?.send(completeEvent)
-                gatewayClient?.disconnect()
+        val sId = activeSessionId ?: return
+        serviceScope.launch {
+            val completeEvent = JSONObject().apply {
+                put("type", "SESSION_STATE_CHANGED")
+                put("sessionId", sId)
+                put("status", "COMPLETED")
+                put("timestamp", System.currentTimeMillis())
             }
+            gatewayClient?.send(completeEvent)
+            try {
+                db.cheerDao().expireInFlightCheersOnSessionCompleted(sId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error expirando ánimos: ${e.message}")
+            }
+            delay(300)
+            gatewayClient?.disconnect()
         }
     }
 
@@ -412,6 +430,10 @@ class RunningActivityService : Service() {
 
         fun sendGatewayEvent(event: JSONObject): Boolean {
             return activeInstance?.gatewayClient?.send(event) ?: false
+        }
+
+        fun onSessionCompleted() {
+            activeInstance?.onSessionCompleted()
         }
     }
 }

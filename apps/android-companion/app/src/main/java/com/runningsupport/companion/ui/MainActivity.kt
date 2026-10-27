@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity() {
                         session = activeSession
                         startTrackingService(activeSession, serverUrl, isSimulationMode)
                     } else {
+                        RunningActivityService.onSessionCompleted()
                         stopTrackingService()
                         sessionManager.markSessionCompleted()
                     }

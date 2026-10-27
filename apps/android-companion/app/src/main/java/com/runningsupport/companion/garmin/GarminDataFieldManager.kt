@@ -333,6 +333,15 @@ class GarminDataFieldManager(
                 return
             }
 
+            if (type == "SESSION_STATE_CHANGED") {
+                logDiagnostic("🏁 Fin de carrera recibido del reloj!")
+                if (!payload.has("sessionId") || payload.optString("sessionId").isEmpty()) {
+                    payload.put("sessionId", sessionId)
+                }
+                telemetryListener?.invoke(payload)
+                return
+            }
+
             if (type != "TELEMETRY_SNAPSHOT") return
 
             if (!payload.has("sessionId") || payload.optString("sessionId").isEmpty()) {

@@ -10,6 +10,7 @@ interface RoomSession {
   athleteName?: string;
   lastTelemetry?: unknown;
   lastNowPlaying?: unknown;
+  lastSessionState?: unknown;
   hasLoggedFirstTelemetry?: boolean;
   verbose?: boolean;
   pathHistory: [number, number][];
@@ -227,6 +228,8 @@ function processTypedMessage(
       handleNowPlayingUpdate(room, msg);
       break;
     case 'SESSION_STATE_CHANGED':
+      room.lastSessionState = msg;
+      console.log(`🏁 [RELAY] Estado de sesión cambiado en "${room.token}": ${msg.status}`);
       broadcastToSpectators(room, JSON.stringify(msg));
       break;
     case 'CHEER_STATUS_UPDATE': {
@@ -320,6 +323,7 @@ function registerSpectatorConnection(
   }
   if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
   if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
+  if (room.lastSessionState) ws.send(JSON.stringify(room.lastSessionState));
   if (room.cheersHistory && room.cheersHistory.size > 0) {
     for (const cheer of room.cheersHistory.values()) {
       ws.send(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
