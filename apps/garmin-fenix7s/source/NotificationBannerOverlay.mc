@@ -20,7 +20,7 @@ class NotificationBannerOverlay {
         isVisible = true;
         showTimestampMs = System.getTimer();
 
-        // Trigger 2 haptic vibration pulses
+        // 2 subtle haptic vibration pulses for incoming cheer notification
         if (Attention has :vibrate) {
             try {
                 var vibeData = [
@@ -48,7 +48,7 @@ class NotificationBannerOverlay {
             return;
         }
 
-        // Auto-dismissal after 7 seconds without using Timer.Timer
+        // Auto-dismissal after 7 seconds
         var now = System.getTimer();
         if (now - showTimestampMs > 7000) {
             isVisible = false;
@@ -58,49 +58,55 @@ class NotificationBannerOverlay {
 
         var width = dc.getWidth();
         var height = dc.getHeight();
-        var bannerHeight = (height * 0.30).toNumber();
 
-        // Top banner background
+        // Elegant top notification pill (similar to native smartwatch notifications)
+        var pillWidth = (width * 0.90).toNumber();
+        var pillHeight = 56;
+        var pillX = (width - pillWidth) / 2;
+        var pillY = 12;
+
+        // Dark pill background
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        dc.fillRectangle(0, 0, width, bannerHeight);
+        dc.fillRoundedRectangle(pillX, pillY, pillWidth, pillHeight, 8);
 
-        // Amber border
+        // Thin orange border
         dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
         dc.setPenWidth(2);
-        dc.drawLine(0, bannerHeight - 1, width, bannerHeight - 1);
+        dc.drawRoundedRectangle(pillX, pillY, pillWidth, pillHeight, 8);
 
-        // Sender & Message
+        // Sender Header
         var sender = activeMessage.get("senderName");
-        var body = activeMessage.get("body");
+        var header = (sender != null) ? ("ÁNIMO DE " + sender.toString().toUpper()) : "NUEVO ÁNIMO";
 
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        if (sender != null) {
-            dc.drawText(
-                width / 2,
-                4,
-                Graphics.FONT_XTINY,
-                sender,
-                Graphics.TEXT_JUSTIFY_CENTER
-            );
-        }
+        dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(
+            width / 2,
+            pillY + 4,
+            Graphics.FONT_XTINY,
+            header,
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+
+        // Message Body
+        var body = activeMessage.get("body");
         if (body != null) {
-            dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(
                 width / 2,
-                22,
+                pillY + 20,
                 Graphics.FONT_TINY,
                 body,
                 Graphics.TEXT_JUSTIFY_CENTER
             );
         }
 
-        // Action prompt
+        // Optional Lap indicator
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(
             width / 2,
-            bannerHeight - 16,
+            pillY + 38,
             Graphics.FONT_XTINY,
-            "[Select] Responder",
+            "[Lap] Agradecer",
             Graphics.TEXT_JUSTIFY_CENTER
         );
     }
