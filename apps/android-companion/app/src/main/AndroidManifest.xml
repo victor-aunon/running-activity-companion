@@ -58,6 +58,11 @@
             android:enabled="true"
             android:exported="false" />
 
+        <receiver
+            android:name=".service.SessionActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>

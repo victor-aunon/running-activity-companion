@@ -14,6 +14,7 @@ export interface HeaderTileProps {
   watchBatteryPct?: number;
   phoneBatteryPct?: number;
   isLive?: boolean;
+  sessionStatus?: string;
   pin?: string;
   onRefresh?: () => void;
   onShare?: () => void;
@@ -73,11 +74,17 @@ function AthleteInfo({
   athleteName,
   locality,
   isLive,
+  sessionStatus,
 }: {
   athleteName: string;
   locality: string;
   isLive: boolean;
+  sessionStatus?: string;
 }) {
+  const isPaused = sessionStatus === 'PAUSED';
+  const badgeVariant = isPaused ? 'en_reloj' : isLive ? 'live' : 'expirado';
+  const badgeText = isPaused ? 'EN PAUSA' : isLive ? 'EN VIVO' : 'FINALIZADO';
+
   return (
     <div className="flex items-center gap-4">
       <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-orange-200">
@@ -89,10 +96,10 @@ function AthleteInfo({
             {athleteName} en Carrera
           </h1>
           <StatusBadge
-            variant={isLive ? 'live' : 'expirado'}
+            variant={badgeVariant}
             className="px-2.5 py-0.5 text-xs font-semibold"
           >
-            {isLive ? 'EN VIVO' : 'FINALIZADO'}
+            {badgeText}
           </StatusBadge>
         </div>
         <p className="text-xs text-slate-500 font-medium flex items-center gap-1 mt-0.5">
@@ -207,13 +214,19 @@ export function HeaderTile({
   watchBatteryPct: _watchBatteryPct,
   phoneBatteryPct: _phoneBatteryPct,
   isLive = false,
+  sessionStatus,
   pin = '----',
   onRefresh,
   onShare,
 }: HeaderTileProps) {
   return (
     <header className="bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-      <AthleteInfo athleteName={athleteName} locality={locality} isLive={isLive} />
+      <AthleteInfo
+        athleteName={athleteName}
+        locality={locality}
+        isLive={isLive}
+        sessionStatus={sessionStatus}
+      />
       <HeaderActionButtons
         elapsedSeconds={elapsedSeconds}
         pin={pin}

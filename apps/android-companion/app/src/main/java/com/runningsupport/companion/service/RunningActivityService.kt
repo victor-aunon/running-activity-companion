@@ -34,6 +34,9 @@ class RunningActivityService : Service() {
     private var spotifyManager: SpotifyMediaSessionService? = null
     private lateinit var db: AppDatabase
     private var activeSessionId: String? = null
+    private var isWatchTimerPaused = false
+    private var lastTelemetryReceivedAt = 0L
+    private var watchdogJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -114,22 +117,32 @@ class RunningActivityService : Service() {
             garminManager?.setTelemetryListener { snapshot ->
                 val type = snapshot.optString("type")
                 if (type == "SESSION_STATE_CHANGED") {
+                    val status = snapshot.optString("status")
+                    if (status == "PAUSED") {
+                        isWatchTimerPaused = true
+                        Log.i(TAG, "Cronómetro del reloj en PAUSA detectado")
+                    } else if (status == "ACTIVE") {
+                        isWatchTimerPaused = false
+                        Log.i(TAG, "Cronómetro del reloj REANUDADO")
+                    } else if (status == "COMPLETED") {
+                        Log.i(TAG, "Fin de carrera recibido del reloj. Completando sesión.")
+                        onSessionCompleted()
+                        return@setTelemetryListener true
+                    }
+
                     serviceScope.launch {
-                        try {
-                            db.cheerDao().expireInFlightCheersOnSessionCompleted(sessionId)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error expirando ánimos: ${e.message}")
-                        }
                         gatewayClient?.send(snapshot)
                     }
                     true
                 } else {
+                    lastTelemetryReceivedAt = System.currentTimeMillis()
                     gatewayClient?.send(snapshot) ?: false
                 }
             }
 
             setupSpotify(sessionId)
             setupCheersListener(sessionId)
+            startInactivityWatchdog(sessionId)
         }
 
         // Configure simulation mode or real ConnectIQ listener dynamically
@@ -222,6 +235,22 @@ class RunningActivityService : Service() {
         }
     }
 
+    private fun startInactivityWatchdog(sessionId: String) {
+        watchdogJob?.cancel()
+        watchdogJob = serviceScope.launch {
+            while (isActive) {
+                delay(10_000L) // Comprobar cada 10s
+                val now = System.currentTimeMillis()
+                // Si el reloj detuvo el cronómetro y no llegan paquetes durante 60 segundos (guardado o descartado en reloj)
+                if (lastTelemetryReceivedAt > 0 && isWatchTimerPaused && (now - lastTelemetryReceivedAt > 60_000L)) {
+                    Log.i(TAG, "Actividad de reloj detenida y finalizada (sin telemetría durante 60s tras pausa). Completando sesión automáticamente.")
+                    onSessionCompleted()
+                    break
+                }
+            }
+        }
+    }
+
     private fun startForegroundServiceNotification() {
         val channelId = "running_activity_gateway_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -241,11 +270,27 @@ class RunningActivityService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val finishIntent = Intent(this, SessionActionReceiver::class.java).apply {
+            action = SessionActionReceiver.ACTION_FINISH_SESSION
+        }
+        val finishPendingIntent = PendingIntent.getBroadcast(
+            this,
+            102,
+            finishIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val finishAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            "Finalizar Carrera",
+            finishPendingIntent
+        ).build()
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Running Support Gateway")
             .setContentText("Transmitiendo telemetría en tiempo real")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(contentIntent)
+            .addAction(finishAction)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

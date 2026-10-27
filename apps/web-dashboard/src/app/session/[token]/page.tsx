@@ -208,6 +208,7 @@ function extractViewMetrics(telemetry: TelemetrySnapshotPacket | null, sessionSt
       phoneBatteryPct: undefined,
       isLive: sessionStatus === 'ACTIVE',
       isCompleted: sessionStatus === 'COMPLETED',
+      sessionStatus,
     };
   }
   const { metrics, coordinates, deviceHealth } = telemetry;
@@ -222,6 +223,7 @@ function extractViewMetrics(telemetry: TelemetrySnapshotPacket | null, sessionSt
     phoneBatteryPct: deviceHealth ? deviceHealth.phoneBatteryPct : undefined,
     isLive: sessionStatus === 'ACTIVE',
     isCompleted: sessionStatus === 'COMPLETED',
+    sessionStatus,
   };
 }
 
@@ -406,6 +408,7 @@ function DashboardHeader({
       watchBatteryPct={vm.watchBatteryPct}
       phoneBatteryPct={vm.phoneBatteryPct}
       isLive={vm.isLive}
+      sessionStatus={vm.sessionStatus}
       pin={displayPin || cfg.pin || '----'}
       onRefresh={onRefresh}
     />
