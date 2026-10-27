@@ -144,7 +144,7 @@ function DemoQuickAccessCard({ onQuickConnect }: { onQuickConnect: () => void })
 function useSessionVerifier() {
   const router = useRouter();
   const [token, setToken] = useState('carrera-victor');
-  const [pin, setPin] = useState('4829');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -210,7 +210,7 @@ export default function SpectatorLandingPage() {
           <DemoQuickAccessCard
             onQuickConnect={() => {
               setToken('carrera-victor');
-              setPin('4829');
+              setPin('');
               setError(null);
             }}
           />

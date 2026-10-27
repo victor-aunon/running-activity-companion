@@ -302,7 +302,7 @@ function registerSpectatorConnection(
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
-  const { ws, room, rooms, token, role, clientId } = ctx;
+  const { ws, room, token, role, clientId } = ctx;
   if (role === 'gateway') {
     if (room.gatewayWs === ws) room.gatewayWs = null;
     room.hasLoggedFirstTelemetry = false;
@@ -313,9 +313,6 @@ function handleSocketClose(ctx: SocketCloseContext) {
       `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})`,
     );
   }
-  if (!room.gatewayWs && room.spectators.size === 0) {
-    rooms.delete(token);
-  }
 }
 
 function verifyRoomPin(
@@ -324,42 +321,33 @@ function verifyRoomPin(
   pin: string,
 ): SessionVerificationResult {
   const cleanPin = pin.trim();
-  const lowerToken = token.trim().toLowerCase();
-  if (lowerToken === 'live-demo' || lowerToken === 'demo' || lowerToken === 'unstarted-live-session') {
-    if (cleanPin === '4829' || !cleanPin) {
-      return { valid: true, active: false, athleteName: 'Víctor', token: lowerToken };
+
+  // If a live room exists with an explicit registered PIN, validate strictly against that live PIN
+  if (room && room.spectatorPin) {
+    if (room.spectatorPin !== cleanPin) {
+      console.warn(
+        `🔒 [RELAY] Verificación de PIN rechazada en "${token}": recibido "${cleanPin}" vs esperado "${room.spectatorPin}"`,
+      );
+      return {
+        valid: false,
+        active: true,
+        error: 'El PIN de 4 dígitos es incorrecto para esta sesión.',
+      };
     }
-  }
-  if (!room) {
+    console.log(`🔑 [RELAY] Verificación de PIN correcta para sesión "${token}"`);
     return {
-      valid: false,
-      active: false,
-      error: `No existe la sesión "${token}". Inicia el servicio en la app Android primero.`,
-    };
-  }
-  if (!room.spectatorPin) {
-    return {
-      valid: false,
+      valid: true,
       active: true,
-      error: `La sesión "${token}" aún no ha registrado su PIN. Espera a que la pasarela Android se registre.`,
+      athleteName: room.athleteName || 'Atleta',
+      token: room.token,
     };
   }
-  if (room.spectatorPin !== cleanPin) {
-    console.warn(
-      `🔒 [RELAY] Verificación de PIN rechazada en "${token}": recibido "${cleanPin}" vs esperado "${room.spectatorPin}"`,
-    );
-    return {
-      valid: false,
-      active: true,
-      error: 'El PIN de 4 dígitos es incorrecto para esta sesión.',
-    };
-  }
-  console.log(`🔑 [RELAY] Verificación de PIN correcta para sesión "${token}"`);
+
+  // If the room has not registered a PIN yet or does not exist yet:
   return {
-    valid: true,
-    active: true,
-    athleteName: room.athleteName || 'Atleta',
-    token: room.token,
+    valid: false,
+    active: false,
+    error: `La sesión "${token}" no existe o aún no ha registrado el PIN desde la app Android.`,
   };
 }
 

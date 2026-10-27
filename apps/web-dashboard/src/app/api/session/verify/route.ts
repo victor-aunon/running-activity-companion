@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+function resolveRelayUrl(): string {
+  if (process.env.RELAY_HTTP_URL) return process.env.RELAY_HTTP_URL;
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    try {
+      const parsed = new URL(process.env.NEXT_PUBLIC_WS_URL);
+      const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+      return `${protocol}//${parsed.host}/api/session/verify`;
+    } catch {
+      // Fallback
+    }
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return `http://127.0.0.1:${process.env.PORT || '3000'}/api/session/verify`;
+  }
+  return 'http://127.0.0.1:3001/api/session/verify';
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token') || '';
-  const pin = req.nextUrl.searchParams.get('pin') || '';
+  const pin = (req.nextUrl.searchParams.get('pin') || '').trim();
 
   if (!token || !pin) {
     return NextResponse.json(
@@ -11,11 +28,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const relayUrl =
-    process.env.RELAY_HTTP_URL ||
-    (process.env.NODE_ENV === 'production'
-      ? `http://127.0.0.1:${process.env.PORT || '3000'}/api/session/verify`
-      : 'http://127.0.0.1:3001/api/session/verify');
+  const relayUrl = resolveRelayUrl();
 
   try {
     const res = await fetch(
