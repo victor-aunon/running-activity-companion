@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense, use, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useLiveTelemetry } from '../../../hooks/useLiveTelemetry';
 import { useEffortZones } from '../../../hooks/useEffortZones';
 import { useGpsLocality } from '../../../hooks/useGpsLocality';
@@ -20,7 +20,7 @@ import { useSpectatorCheer } from '../../../hooks/useSpectatorCheer';
 import { useNowPlaying } from '../../../hooks/useNowPlaying';
 import type { HeartRateZoneResult } from '../../../types/telemetry';
 import type { RunningMetrics, TelemetrySnapshotPacket } from '@running-support/shared-contracts';
-import { Heart, Gauge, Flag, Footprints } from 'lucide-react';
+import { Heart, Gauge, Flag, Footprints, KeyRound } from 'lucide-react';
 import {
   MOCK_STITCH_FIXTURE,
   MOCK_STITCH_NOW_PLAYING_IDLE,
@@ -542,7 +542,31 @@ function useDashboardSession(token: string) {
     setIsDismissed,
     activePin: spectator.pin || init.initialPin || init.fallbackPin,
     client: telemetry.client,
+    isUnauthorized: telemetry.isUnauthorized,
   };
+}
+
+function UnauthorizedAccessCard({ token }: { token: string }) {
+  const router = useRouter();
+  return (
+    <main className="min-h-screen bg-slate-50/70 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white/90 backdrop-blur-md rounded-2xl border border-red-200 shadow-xl p-6 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+          <KeyRound className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800">Acceso no autorizado</h2>
+        <p className="text-sm text-slate-600">
+          El PIN de 4 dígitos proporcionado para la sesión &ldquo;{token}&rdquo; es incorrecto.
+        </p>
+        <button
+          onClick={() => router.push('/')}
+          className="w-full py-2.5 px-4 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-colors shadow-sm cursor-pointer"
+        >
+          Volver a Introducir PIN
+        </button>
+      </div>
+    </main>
+  );
 }
 
 function SessionDashboardInner({ token }: { token: string }) {
@@ -553,6 +577,10 @@ function SessionDashboardInner({ token }: { token: string }) {
         session.client?.connect();
       }
     : undefined;
+
+  if (session.isUnauthorized) {
+    return <UnauthorizedAccessCard token={token} />;
+  }
 
   return (
     <DashboardLayout

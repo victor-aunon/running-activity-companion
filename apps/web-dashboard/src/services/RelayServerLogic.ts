@@ -175,12 +175,19 @@ function handleTelemetrySnapshot(room: RoomSession, msg: any) {
 }
 
 function handleNowPlayingUpdate(room: RoomSession, msg: any) {
-  room.lastNowPlaying = msg;
-  const title = msg.track?.title || 'Sin título';
-  const artist = msg.track?.artist || 'Sin artista';
-  const state = msg.playback?.state || 'IDLE';
+  const isStopped = msg.playback?.state === 'STOPPED' || msg.playback?.state === 'NONE';
+  const prevTrack = (room.lastNowPlaying as any)?.track;
+  const mergedTrack = isStopped ? null : (msg.track ?? prevTrack ?? null);
+  const updatedMsg = {
+    ...msg,
+    track: mergedTrack,
+  };
+  room.lastNowPlaying = updatedMsg;
+  const title = updatedMsg.track?.title || 'Sin título';
+  const artist = updatedMsg.track?.artist || 'Sin artista';
+  const state = updatedMsg.playback?.state || 'IDLE';
   console.log(`🎵 [RELAY] Música en "${room.token}" | ${title} - ${artist} (${state})`);
-  broadcastToSpectators(room, JSON.stringify(msg));
+  broadcastToSpectators(room, JSON.stringify(updatedMsg));
 }
 
 function parseRawMessage(raw: unknown) {
@@ -251,7 +258,24 @@ function registerSpectatorConnection(
   room: RoomSession,
   token: string,
   clientId: string,
+  pin?: string,
 ) {
+  const cleanPin = (pin || '').trim();
+  if (room.spectatorPin && cleanPin && cleanPin !== room.spectatorPin) {
+    console.warn(
+      `🔒 [RELAY] Espectador rechazado en "${token}": PIN "${cleanPin}" incorrecto (esperado "${room.spectatorPin}")`,
+    );
+    ws.send(
+      JSON.stringify({
+        type: 'ERROR',
+        code: 'UNAUTHORIZED_PIN',
+        message: 'PIN de espectador incorrecto para esta sesión.',
+      }),
+    );
+    ws.close(4001, 'Unauthorized PIN');
+    return;
+  }
+
   const existingWs = room.spectators.get(clientId);
   if (existingWs && existingWs !== ws) {
     try {
@@ -300,6 +324,12 @@ function verifyRoomPin(
   pin: string,
 ): SessionVerificationResult {
   const cleanPin = pin.trim();
+  const lowerToken = token.trim().toLowerCase();
+  if (lowerToken === 'live-demo' || lowerToken === 'demo' || lowerToken === 'unstarted-live-session') {
+    if (cleanPin === '4829' || !cleanPin) {
+      return { valid: true, active: false, athleteName: 'Víctor', token: lowerToken };
+    }
+  }
   if (!room) {
     return {
       valid: false,
@@ -352,6 +382,7 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     const url = new URL(req.url || '', 'ws://localhost');
     const token = (url.searchParams.get('token') || 'default').trim().toLowerCase();
     const role = url.searchParams.get('role') || 'spectator';
+    const pin = (url.searchParams.get('pin') || '').trim();
     const clientId =
       url.searchParams.get('clientId') || `spectator-${Math.random().toString(36).slice(2, 8)}`;
     const room = getOrCreateRoom(token);
@@ -359,7 +390,7 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     if (role === 'gateway') {
       registerGatewayConnection(ws, room, token);
     } else {
-      registerSpectatorConnection(ws, room, token, clientId);
+      registerSpectatorConnection(ws, room, token, clientId, pin);
     }
 
     const tracker: RateLimitTracker = { failedAttempts: 0, lockedUntil: 0 };

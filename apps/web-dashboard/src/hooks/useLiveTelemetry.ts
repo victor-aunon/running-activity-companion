@@ -58,7 +58,7 @@ function useTelemetryState(
 ) {
   const [telemetry, setTelemetry] = useState<TelemetrySnapshotPacket | null>(initialTelemetry);
   const [sessionStatus, setSessionStatus] = useState<string>('ACTIVE');
-  const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
+  const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED');
   const [pathCoordinates, setPathCoordinates] = useState<[number, number][]>(initialPath);
   const [elevationHistory, setElevationHistory] = useState<number[]>(
     initialTelemetry?.coordinates ? [initialTelemetry.coordinates.elevationM] : [],
@@ -85,24 +85,32 @@ export function useLiveTelemetry({
   initialPathCoordinates = [],
 }: UseLiveTelemetryOptions) {
   const state = useTelemetryState(initialTelemetry, initialPathCoordinates);
-  const clientRef = useRef<WebSocketClient | null>(null);
+  const [client, setClient] = useState<WebSocketClient | null>(null);
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
 
   useEffect(() => {
     if (!token) return;
 
+    setIsUnauthorized(false);
     const url = resolveDefaultWsUrl(wsUrl);
-    const client = new WebSocketClient({ url, token, role: 'spectator', pin });
-    clientRef.current = client;
+    const newClient = new WebSocketClient({ url, token, role: 'spectator', pin });
+    setClient(newClient);
 
-    const unsubscribeState = client.onStateChange((s) => state.setConnectionState(s));
-    const unsubscribeMsg = client.onMessage((msg) => handleDownlinkPacket(msg, state));
+    const unsubscribeState = newClient.onStateChange((s) => state.setConnectionState(s));
+    const unsubscribeMsg = newClient.onMessage((msg) => {
+      if (msg.type === 'ERROR' && (msg as any).code === 'UNAUTHORIZED_PIN') {
+        setIsUnauthorized(true);
+      }
+      handleDownlinkPacket(msg, state);
+    });
 
-    client.connect();
+    newClient.connect();
 
     return () => {
       unsubscribeState();
       unsubscribeMsg();
-      client.disconnect();
+      newClient.disconnect();
+      setClient(null);
     };
   }, [token, pin, wsUrl]);
 
@@ -112,6 +120,7 @@ export function useLiveTelemetry({
     connectionState: state.connectionState,
     pathCoordinates: state.pathCoordinates,
     elevationHistory: state.elevationHistory,
-    client: clientRef.current,
+    client,
+    isUnauthorized,
   };
 }

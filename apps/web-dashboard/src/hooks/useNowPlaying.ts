@@ -125,18 +125,23 @@ function usePausedAutoTransition(
   nowPlaying: NowPlayingUpdatePacket | null,
   onTransition: () => void,
 ) {
+  const onTransitionRef = useRef(onTransition);
+  onTransitionRef.current = onTransition;
+
   useEffect(() => {
     if (!nowPlaying || nowPlaying.playback.state !== 'PAUSED') return;
 
     const elapsed = Math.max(0, Date.now() - nowPlaying.playback.capturedAt);
     if (elapsed >= 60000) {
-      onTransition();
+      onTransitionRef.current();
       return;
     }
 
-    const timeout = setTimeout(onTransition, 60000 - elapsed);
+    const timeout = setTimeout(() => {
+      onTransitionRef.current();
+    }, 60000 - elapsed);
     return () => clearTimeout(timeout);
-  }, [nowPlaying, onTransition]);
+  }, [nowPlaying?.playback.state, nowPlaying?.playback.capturedAt]);
 }
 
 export function useNowPlaying({ client, initialNowPlaying }: UseNowPlayingOptions) {

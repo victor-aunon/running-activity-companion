@@ -146,8 +146,9 @@ function useSessionVerifier() {
   const [token, setToken] = useState('carrera-victor');
   const [pin, setPin] = useState('4829');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanToken = token
       .trim()
@@ -164,11 +165,28 @@ function useSessionVerifier() {
       return;
     }
 
+    setIsLoading(true);
     setError(null);
-    router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
+
+    try {
+      const res = await fetch(
+        `/api/session/verify?token=${encodeURIComponent(cleanToken)}&pin=${encodeURIComponent(cleanPin)}`,
+      );
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setError(data.error || 'El PIN de 4 dígitos es incorrecto para esta sesión.');
+        setIsLoading(false);
+        return;
+      }
+
+      router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
+    } catch {
+      setError('No se pudo verificar el PIN con el servidor. Comprueba la conexión.');
+      setIsLoading(false);
+    }
   };
 
-  return { token, setToken, pin, setPin, error, setError, isLoading: false, handleSubmit };
+  return { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit };
 }
 
 export default function SpectatorLandingPage() {

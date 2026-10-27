@@ -90,4 +90,104 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     wsGateway.close();
     wsSpectator.close();
   });
+
+  await t.test('Relay persists track metadata across NOW_PLAYING_UPDATE playback packets', async () => {
+    const { ws: wsGateway } = await registerGateway(port, 'token-spotify', '4829');
+
+    // 1. Send track metadata with PLAYING state
+    wsGateway.send(
+      JSON.stringify({
+        type: 'NOW_PLAYING_UPDATE',
+        sessionId: 'token-spotify',
+        timestamp: Date.now(),
+        playback: { state: 'PLAYING', positionMs: 10000, capturedAt: Date.now(), isLiveSync: true },
+        track: {
+          trackId: '4cOdK2wGLETKBW3PvgPWqT',
+          title: 'The Pretender',
+          artist: 'Foo Fighters',
+          durationMs: 269000,
+          spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+        },
+      }),
+    );
+
+    // 2. Gateway sends a state-only packet with track: null (e.g. Android playbackstatechanged)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    wsGateway.send(
+      JSON.stringify({
+        type: 'NOW_PLAYING_UPDATE',
+        sessionId: 'token-spotify',
+        timestamp: Date.now(),
+        playback: { state: 'PLAYING', positionMs: 15000, capturedAt: Date.now(), isLiveSync: true },
+        track: null,
+      }),
+    );
+
+    // 3. New spectator connects and receives replayed lastNowPlaying
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const wsSpectator = new WebSocket(
+      `ws://localhost:${port}/api/ws/session?token=token-spotify&role=spectator&pin=4829`,
+    );
+
+    const receivedNowPlaying = await new Promise<any>((resolve) => {
+      wsSpectator.on('message', (data) => {
+        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+        const msg = JSON.parse(text);
+        if (msg.type === 'NOW_PLAYING_UPDATE') {
+          resolve(msg);
+        }
+      });
+    });
+
+    assert.equal(receivedNowPlaying.playback.state, 'PLAYING');
+    assert.ok(receivedNowPlaying.track, 'Track should be preserved in relay');
+    assert.equal(receivedNowPlaying.track.title, 'The Pretender');
+    assert.equal(receivedNowPlaying.track.artist, 'Foo Fighters');
+
+    wsGateway.close();
+    wsSpectator.close();
+  });
+
+  await t.test('Relay rejects spectator connection if incorrect PIN is supplied in query params', async () => {
+    const { ws: wsGateway } = await registerGateway(port, 'token-auth', '4829');
+
+    const wsSpectator = new WebSocket(
+      `ws://localhost:${port}/api/ws/session?token=token-auth&role=spectator&pin=9999`,
+    );
+
+    const errorPromise = new Promise<{ type: string; code: string }>((resolve) => {
+      wsSpectator.on('message', (data) => {
+        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+        resolve(JSON.parse(text));
+      });
+    });
+
+    const closeCodePromise = new Promise<number>((resolve) => {
+      wsSpectator.on('close', (code) => resolve(code));
+    });
+
+    const errorMsg = await errorPromise;
+    assert.equal(errorMsg.type, 'ERROR');
+    assert.equal(errorMsg.code, 'UNAUTHORIZED_PIN');
+
+    const closeCode = await closeCodePromise;
+    assert.equal(closeCode, 4001);
+
+    wsGateway.close();
+  });
+
+  await t.test('verifySession validates token and pin accurately', async () => {
+    const { ws: wsGateway } = await registerGateway(port, 'token-verify', '1234');
+
+    const wrongPinResult = relay.verifySession('token-verify', '9999');
+    assert.equal(wrongPinResult.valid, false);
+
+    const correctPinResult = relay.verifySession('token-verify', '1234');
+    assert.equal(correctPinResult.valid, true);
+
+    const nonExistentResult = relay.verifySession('unknown-session', '1234');
+    assert.equal(nonExistentResult.valid, false);
+
+    wsGateway.close();
+  });
 });

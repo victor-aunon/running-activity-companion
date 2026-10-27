@@ -101,7 +101,15 @@ function TrackProgressBar({ currentMs, durationMs }: { currentMs: number; durati
 
 function SpotifyEmbedPlayer({ trackId }: { trackId: string }) {
   const [isLoading, setIsLoading] = useState(true);
-  const cleanTrackId = trackId.replace('spotify:track:', '');
+  const cleanTrackId = (trackId || '').replace('spotify:track:', '');
+  const isValidSpotifyId = Boolean(
+    cleanTrackId && !cleanTrackId.startsWith('track-') && cleanTrackId !== 'unknown',
+  );
+
+  if (!isValidSpotifyId) {
+    return null;
+  }
+
   const embedUrl = `https://open.spotify.com/embed/track/${cleanTrackId}?utm_source=generator&theme=0`;
 
   return (
