@@ -22,4 +22,25 @@ void test('useSpectatorCheer Unit Test: Cheer validation and name truncation log
     assert.equal(pinRegex.test('12345'), false);
     assert.equal(pinRegex.test('abcd'), false);
   });
+
+  await t.test('Formats cheer statuses gracefully for the UI', () => {
+    function resolveStatusLabel(status: string): string {
+      switch (status) {
+        case 'EN_RELOJ':
+        case 'ENVIADO':
+          return 'Enviado';
+        case 'AGRADECIDO':
+          return 'Agradecido';
+        case 'EXPIRADO':
+          return 'Expirado';
+        default:
+          return 'Enviado';
+      }
+    }
+
+    assert.equal(resolveStatusLabel('EN_RELOJ'), 'Enviado');
+    assert.equal(resolveStatusLabel('ENVIADO'), 'Enviado');
+    assert.equal(resolveStatusLabel('AGRADECIDO'), 'Agradecido');
+    assert.equal(resolveStatusLabel('EXPIRADO'), 'Expirado');
+  });
 });

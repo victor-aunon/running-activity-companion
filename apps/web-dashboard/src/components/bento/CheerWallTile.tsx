@@ -19,20 +19,69 @@ export interface CheerWallTileProps {
   athleteName?: string;
 }
 
+function formatShortTime(timestamp?: number): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+interface CheerStatusConfig {
+  label: string;
+  className: string;
+}
+
+function resolveCheerStatusConfig(status: CheerItem['status']): CheerStatusConfig {
+  switch (status) {
+    case 'EN_RELOJ':
+    case 'ENVIADO':
+      return {
+        label: 'Enviado',
+        className: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+      };
+    case 'AGRADECIDO':
+      return {
+        label: 'Agradecido',
+        className: 'bg-purple-50 text-purple-700 border-purple-200/80',
+      };
+    case 'EXPIRADO':
+      return {
+        label: 'Expirado',
+        className: 'bg-slate-100 text-slate-500 border-slate-200/80',
+      };
+    default:
+      return {
+        label: 'Enviado',
+        className: 'bg-slate-50 text-slate-600 border-slate-200/80',
+      };
+  }
+}
+
 function CheerItemCard({ cheer }: { cheer: CheerItem }) {
   const fallbackReply = `${process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor'} te lo agradece`;
+  const timeStr = formatShortTime(cheer.timestamp);
+  const statusCfg = resolveCheerStatusConfig(cheer.status);
+
   return (
     <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/60 flex flex-col gap-1.5 transition-colors">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-800">{cheer.senderName}</span>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-          {cheer.status}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs font-bold text-slate-800 truncate">{cheer.senderName}</span>
+          {timeStr && (
+            <span className="text-[11px] font-medium text-slate-400 shrink-0">({timeStr})</span>
+          )}
+        </div>
+        <span
+          className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${statusCfg.className}`}
+        >
+          {statusCfg.label}
         </span>
       </div>
       <p className="text-xs text-slate-600 italic">"{cheer.body}"</p>
       {cheer.status === 'AGRADECIDO' && (
         <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold text-purple-700 bg-purple-50 p-1.5 rounded-md border border-purple-200">
-          <HeartHandshake className="w-3.5 h-3.5 text-purple-500" />
+          <HeartHandshake className="w-3.5 h-3.5 text-purple-500 shrink-0" />
           <span>{cheer.runnerReplyText || fallbackReply}</span>
         </div>
       )}
@@ -52,13 +101,16 @@ function CheerFeed({ displayCheers }: { displayCheers: CheerItem[] }) {
     );
   }
 
+  // Ordenar mensajes más recientes primero (orden cronológico inverso)
+  const sortedCheers = [...displayCheers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
   return (
     <div className="border-t border-slate-100 pt-3 flex-1 flex flex-col min-h-0">
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
         Mensajes Recientes ({displayCheers.length})
       </div>
-      <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[300px] lg:max-h-none">
-        {displayCheers.map((c) => (
+      <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[280px]">
+        {sortedCheers.map((c) => (
           <CheerItemCard key={c.notificationId} cheer={c} />
         ))}
       </div>
