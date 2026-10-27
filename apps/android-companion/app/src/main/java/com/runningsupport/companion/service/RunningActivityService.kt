@@ -41,6 +41,9 @@ class RunningActivityService : Service() {
         try {
             db = AppDatabase.getDatabase(this)
             garminManager = GarminDataFieldManager(this, serviceScope)
+            garminManager?.setConnectionStateListener { isConnected ->
+                _isGarminConnectedState.value = isConnected
+            }
             acquireWakeLock()
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing service components in onCreate: ${e.message}", e)
@@ -109,9 +112,13 @@ class RunningActivityService : Service() {
             setupCheersListener(sessionId)
         }
 
-        // Configure simulation mode dynamically
-        garminManager?.setSimulationMode(isSimulation, sessionId)
-        _isGarminConnectedState.value = isSimulation
+        // Configure simulation mode or real ConnectIQ listener dynamically
+        if (isSimulation) {
+            garminManager?.setSimulationMode(true, sessionId)
+            _isGarminConnectedState.value = true
+        } else {
+            garminManager?.start(sessionId)
+        }
         _isServiceRunningState.value = true
 
         return START_STICKY
@@ -231,7 +238,8 @@ class RunningActivityService : Service() {
 
     override fun onDestroy() {
         serviceJob.cancel()
-        garminManager?.setSimulationMode(false, "")
+        garminManager?.stop()
+        garminManager = null
         spotifyManager?.unregister()
         spotifyManager = null
         gatewayClient?.disconnect()
