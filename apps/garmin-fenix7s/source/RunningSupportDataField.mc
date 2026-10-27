@@ -40,46 +40,6 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
     }
 
-    // Se invoca cuando el corredor pulsa el botón físico STOP en el reloj
-    function onTimerStop() as Void {
-        if (transmitter != null) {
-            var payload = {
-                "type" => "SESSION_STATE_CHANGED",
-                "status" => "PAUSED",
-                "timestamp" => Time.now().value().toLong() * 1000L
-            };
-            transmitter.transmit(payload);
-        }
-    }
-
-    function onTimerPause() as Void {
-        onTimerStop();
-    }
-
-    // Se invoca cuando el corredor reanuda la actividad tras una pausa
-    function onTimerResume() as Void {
-        if (transmitter != null) {
-            var payload = {
-                "type" => "SESSION_STATE_CHANGED",
-                "status" => "ACTIVE",
-                "timestamp" => Time.now().value().toLong() * 1000L
-            };
-            transmitter.transmit(payload);
-        }
-    }
-
-    // Se invoca si el cronómetro se reinicia
-    function onTimerReset() as Void {
-        if (transmitter != null) {
-            var payload = {
-                "type" => "SESSION_STATE_CHANGED",
-                "status" => "COMPLETED",
-                "timestamp" => Time.now().value().toLong() * 1000L
-            };
-            transmitter.transmit(payload);
-        }
-    }
-
     hidden function checkServiceEnabled() as Void {
         try {
             var val = Application.Properties.getValue("ServiceEnabled");

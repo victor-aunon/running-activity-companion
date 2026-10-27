@@ -34,9 +34,11 @@ class RunningActivityService : Service() {
     private var spotifyManager: SpotifyMediaSessionService? = null
     private lateinit var db: AppDatabase
     private var activeSessionId: String? = null
-    private var isWatchTimerPaused = false
+    private var receivedPacketsCount = 0
     private var lastTelemetryReceivedAt = 0L
     private var watchdogJob: kotlinx.coroutines.Job? = null
+    private var isPromptingFinish = false
+    private var promptCountdownJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -118,24 +120,22 @@ class RunningActivityService : Service() {
                 val type = snapshot.optString("type")
                 if (type == "SESSION_STATE_CHANGED") {
                     val status = snapshot.optString("status")
-                    if (status == "PAUSED") {
-                        isWatchTimerPaused = true
-                        Log.i(TAG, "Cronómetro del reloj en PAUSA detectado")
-                    } else if (status == "ACTIVE") {
-                        isWatchTimerPaused = false
-                        Log.i(TAG, "Cronómetro del reloj REANUDADO")
-                    } else if (status == "COMPLETED") {
+                    if (status == "COMPLETED") {
                         Log.i(TAG, "Fin de carrera recibido del reloj. Completando sesión.")
                         onSessionCompleted()
                         return@setTelemetryListener true
                     }
-
                     serviceScope.launch {
                         gatewayClient?.send(snapshot)
                     }
                     true
                 } else {
+                    receivedPacketsCount++
                     lastTelemetryReceivedAt = System.currentTimeMillis()
+                    if (isPromptingFinish) {
+                        Log.i(TAG, "Telemetría del reloj recuperada. Cancelando aviso de fin de carrera.")
+                        dismissFinishPrompt()
+                    }
                     gatewayClient?.send(snapshot) ?: false
                 }
             }
@@ -239,16 +239,89 @@ class RunningActivityService : Service() {
         watchdogJob?.cancel()
         watchdogJob = serviceScope.launch {
             while (isActive) {
-                delay(10_000L) // Comprobar cada 10s
+                delay(5_000L) // Comprobar cada 5s
                 val now = System.currentTimeMillis()
-                // Si el reloj detuvo el cronómetro y no llegan paquetes durante 60 segundos (guardado o descartado en reloj)
-                if (lastTelemetryReceivedAt > 0 && isWatchTimerPaused && (now - lastTelemetryReceivedAt > 60_000L)) {
-                    Log.i(TAG, "Actividad de reloj detenida y finalizada (sin telemetría durante 60s tras pausa). Completando sesión automáticamente.")
-                    onSessionCompleted()
-                    break
+                // Si la sesión ya estaba recibiendo datos del reloj (> 5 paquetes) y cesa la telemetría por más de 45 segundos
+                if (receivedPacketsCount >= 5 && lastTelemetryReceivedAt > 0 && (now - lastTelemetryReceivedAt > 45_000L)) {
+                    if (!isPromptingFinish) {
+                        launchFinishPromptConfirmation(sessionId)
+                    }
                 }
             }
         }
+    }
+
+    private fun launchFinishPromptConfirmation(sessionId: String) {
+        isPromptingFinish = true
+        Log.i(TAG, "Telemetría del reloj inactiva (>45s). Emitiendo confirmación interactiva con 20s de cuenta atrás.")
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+        val keepRunningIntent = Intent(this, SessionActionReceiver::class.java).apply {
+            action = SessionActionReceiver.ACTION_KEEP_RUNNING
+        }
+        val keepRunningPendingIntent = PendingIntent.getBroadcast(
+            this,
+            103,
+            keepRunningIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val keepRunningAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_media_play,
+            "Aún no he finalizado",
+            keepRunningPendingIntent
+        ).build()
+
+        val confirmFinishIntent = Intent(this, SessionActionReceiver::class.java).apply {
+            action = SessionActionReceiver.ACTION_CONFIRM_FINISH
+        }
+        val confirmFinishPendingIntent = PendingIntent.getBroadcast(
+            this,
+            104,
+            confirmFinishIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val confirmFinishAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            "Sí, finalizar",
+            confirmFinishPendingIntent
+        ).build()
+
+        val notification = NotificationCompat.Builder(this, CHEERS_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("⚠️ ¿Has terminado la carrera?")
+            .setContentText("Sin señal del reloj. Se finalizará en 20 segundos.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("No se recibe telemetría del reloj Garmin. La carrera se dará por finalizada automáticamente en 20 segundos.")
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setTimeoutAfter(20_000L)
+            .addAction(keepRunningAction)
+            .addAction(confirmFinishAction)
+            .build()
+
+        notificationManager?.notify(FINISH_PROMPT_NOTIFICATION_ID, notification)
+
+        promptCountdownJob?.cancel()
+        promptCountdownJob = serviceScope.launch {
+            delay(20_000L)
+            if (isPromptingFinish) {
+                Log.i(TAG, "Cuenta atrás de 20s concluida sin veto. Finalizando carrera automáticamente.")
+                dismissFinishPrompt()
+                onSessionCompleted()
+            }
+        }
+    }
+
+    fun dismissFinishPrompt() {
+        isPromptingFinish = false
+        promptCountdownJob?.cancel()
+        promptCountdownJob = null
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.cancel(FINISH_PROMPT_NOTIFICATION_ID)
     }
 
     private fun startForegroundServiceNotification() {
@@ -316,6 +389,9 @@ class RunningActivityService : Service() {
     }
 
     override fun onDestroy() {
+        dismissFinishPrompt()
+        watchdogJob?.cancel()
+        watchdogJob = null
         if (activeInstance == this) {
             activeInstance = null
         }
@@ -479,6 +555,16 @@ class RunningActivityService : Service() {
 
         fun onSessionCompleted() {
             activeInstance?.onSessionCompleted()
+        }
+
+        const val FINISH_PROMPT_NOTIFICATION_ID = 202
+
+        fun cancelFinishPromptAndKeepRunning() {
+            activeInstance?.let { instance ->
+                instance.dismissFinishPrompt()
+                instance.lastTelemetryReceivedAt = System.currentTimeMillis()
+                Log.i(TAG, "Aviso de finalización cancelado por el corredor. Se extiende la actividad.")
+            }
         }
     }
 }
