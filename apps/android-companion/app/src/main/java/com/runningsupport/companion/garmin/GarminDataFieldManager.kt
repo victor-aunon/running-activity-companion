@@ -1,7 +1,11 @@
 package com.runningsupport.companion.garmin
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.garmin.android.connectiq.ConnectIQ
 import com.garmin.android.connectiq.IQApp
 import com.garmin.android.connectiq.IQDevice
@@ -148,6 +152,39 @@ class GarminDataFieldManager(
         }
     }
 
+    private var directReceiver: BroadcastReceiver? = null
+
+    private fun registerDirectBroadcastReceiver() {
+        if (directReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent == null) return
+                if (intent.action == "com.garmin.android.connectiq.INCOMING_MESSAGE") {
+                    logDiagnostic("⚡ Broadcast INCOMING_MESSAGE interceptado directamente")
+                    val extras = intent.extras ?: return
+                    val payload = extras.get("com.garmin.android.connectiq.EXTRA_PAYLOAD")
+                        ?: extras.get("EXTRA_PAYLOAD")
+                    if (payload != null) {
+                        handleIncomingGarminPayload(payload)
+                    }
+                }
+            }
+        }
+        directReceiver = receiver
+        val filter = IntentFilter("com.garmin.android.connectiq.INCOMING_MESSAGE")
+        try {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            logDiagnostic("✓ BroadcastReceiver directo registrado con RECEIVER_EXPORTED")
+        } catch (e: Exception) {
+            logDiagnostic("Aviso al registrar broadcast directo: ${e.message}")
+        }
+    }
+
     private fun discoverAndRegisterDevices() {
         val ciq = connectIQ ?: return
         if (!isSdkReady) return
@@ -158,17 +195,21 @@ class GarminDataFieldManager(
 
             logDiagnostic("Dispositivos Garmin: ${connectedList.size} conectados, ${knownList.size} conocidos")
 
-            val device = connectedList.firstOrNull() ?: knownList.firstOrNull()
-            if (device != null) {
-                targetDevice = device
-                logDiagnostic("Reloj seleccionado: ${device.friendlyName} (${device.deviceIdentifier})")
+            val allDevices = (connectedList + knownList).distinctBy { it.deviceIdentifier }
+            if (allDevices.isNotEmpty()) {
+                val primary = connectedList.firstOrNull() ?: allDevices.first()
+                targetDevice = primary
+                logDiagnostic("Reloj principal: ${primary.friendlyName} (${primary.deviceIdentifier})")
                 _diagnosticsState.update {
                     it.copy(
-                        deviceName = device.friendlyName,
-                        deviceId = device.deviceIdentifier.toString()
+                        deviceName = primary.friendlyName,
+                        deviceId = primary.deviceIdentifier.toString()
                     )
                 }
-                registerDeviceListeners(device)
+                for (dev in allDevices) {
+                    registerDeviceListeners(dev)
+                }
+                registerDirectBroadcastReceiver()
             } else {
                 logDiagnostic("⚠️ No se detectó ningún reloj Garmin enlazado en Garmin Connect")
                 _diagnosticsState.update {
@@ -225,13 +266,28 @@ class GarminDataFieldManager(
         val ciq = connectIQ ?: return
         try {
             logDiagnostic("Registrando listener de la app DataField (${garminApp.applicationId})")
+            
+            // Comprobar si GCM reconoce la app instalada en el reloj
+            try {
+                ciq.getApplicationInfo(GARMIN_APP_UUID, device, object : ConnectIQ.IQApplicationInfoListener {
+                    override fun onApplicationInfoReceived(app: IQApp?) {
+                        logDiagnostic("✓ App verificada en reloj por GCM: ${app?.displayName ?: "RunningSupport"} v${app?.version ?: 1}")
+                    }
+
+                    override fun onApplicationNotInstalled(applicationId: String?) {
+                        logDiagnostic("⚠️ GCM indica que la app $applicationId no está en el reloj (verifica que esté instalada)")
+                    }
+                })
+            } catch (e: Exception) {
+                logDiagnostic("Aviso getApplicationInfo: ${e.message}")
+            }
+
             ciq.registerForAppEvents(device, garminApp) { dev, app, messageList, status ->
-                if (status == ConnectIQ.IQMessageStatus.SUCCESS && messageList != null) {
+                logDiagnostic("Mensaje ConnectIQ: status=$status, count=${messageList?.size ?: 0}")
+                if (messageList != null && messageList.isNotEmpty()) {
                     for (msg in messageList) {
                         handleIncomingGarminPayload(msg)
                     }
-                } else {
-                    logDiagnostic("Mensaje app status: $status")
                 }
             }
             _diagnosticsState.update { it.copy(isAppRegistered = true) }
@@ -245,13 +301,21 @@ class GarminDataFieldManager(
             is Map<*, *> -> mapToJson(msg)
             is String -> try { JSONObject(msg) } catch (e: Exception) { null }
             is JSONObject -> msg
-            else -> null
+            else -> {
+                try {
+                    JSONObject(msg.toString())
+                } catch (e: Exception) {
+                    null
+                }
+            }
         }
 
         if (json != null) {
+            val type = json.optString("type", "UNKNOWN")
+            logDiagnostic("✓ Paquete recibido de reloj: type=$type (seq=${json.optLong("seq")})")
             onBleMessageReceived(currentSessionId, json)
         } else {
-            logDiagnostic("Formato de mensaje no reconocido de Garmin: ${msg.javaClass.name}")
+            logDiagnostic("Formato de mensaje no reconocido: ${msg.javaClass.name}")
         }
     }
 
@@ -429,6 +493,14 @@ class GarminDataFieldManager(
             ciq?.shutdown(context)
         } catch (e: Exception) {
             Log.w(TAG, "Error apagando ConnectIQ: ${e.message}")
+        }
+        directReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+            } catch (e: Exception) {
+                // Ignore
+            }
+            directReceiver = null
         }
         targetDevice = null
         isSdkReady = false

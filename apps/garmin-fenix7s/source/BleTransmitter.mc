@@ -9,11 +9,14 @@ class BleTransmitter {
     private var ringBuffer as Lang.Array<Lang.Dictionary> = [];
     private const MAX_BUFFER_SIZE = 10;
     private var retryTimer as Timer.Timer?;
+    private var watchdogTimer as Timer.Timer?;
     private var cheerCallback as Method?;
+    private var lastSeq as Lang.Number = 0;
 
     function initialize() {
         ringBuffer = [];
         retryTimer = new Timer.Timer();
+        watchdogTimer = new Timer.Timer();
         isConnected = true;
         isTransmitting = false;
         setupListener();
@@ -33,8 +36,15 @@ class BleTransmitter {
     }
 
     public function transmit(payload as Lang.Dictionary) as Void {
+        if (payload.hasKey("seq")) {
+            lastSeq = payload["seq"] as Lang.Number;
+        }
+
         if (!isTransmitting) {
             isTransmitting = true;
+            if (watchdogTimer != null) {
+                watchdogTimer.start(method(:onWatchdogTimeout), 2500, false);
+            }
             var listener = new CommListener(self, payload);
             try {
                 Communications.transmit(payload, null, listener);
@@ -47,6 +57,12 @@ class BleTransmitter {
         }
     }
 
+    public function onWatchdogTimeout() as Void {
+        System.println("[BLE] Watchdog: callback demorado, liberando canal de transmision");
+        isTransmitting = false;
+        flushBuffer();
+    }
+
     public function bufferPayload(payload as Lang.Dictionary) as Void {
         if (ringBuffer.size() >= MAX_BUFFER_SIZE) {
             // Drop oldest packet (FIFO) to strictly protect heap
@@ -56,12 +72,18 @@ class BleTransmitter {
     }
 
     public function onTransmitSuccess() as Void {
+        if (watchdogTimer != null) {
+            watchdogTimer.stop();
+        }
         isTransmitting = false;
         isConnected = true;
         flushBuffer();
     }
 
     public function onTransmitFailed(failedPayload as Lang.Dictionary) as Void {
+        if (watchdogTimer != null) {
+            watchdogTimer.stop();
+        }
         isTransmitting = false;
         isConnected = false;
         bufferPayload(failedPayload);
@@ -70,7 +92,7 @@ class BleTransmitter {
 
     hidden function scheduleRetry() as Void {
         if (retryTimer != null) {
-            retryTimer.start(method(:onRetryTrigger), 3000, false);
+            retryTimer.start(method(:onRetryTrigger), 2000, false);
         }
     }
 
@@ -110,12 +132,14 @@ class BleTransmitter {
         Communications.emptyMailbox();
     }
 
-    public function getBufferSize() as Lang.Number {
-        return ringBuffer.size();
-    }
-
-    public function getBufferItem(index as Lang.Number) as Lang.Dictionary {
-        return ringBuffer[index];
+    public function getStatusString() as Lang.String {
+        if (!isConnected) {
+            return "REINTENTO (" + ringBuffer.size() + ")";
+        }
+        if (isTransmitting) {
+            return "ENVIANDO #" + lastSeq;
+        }
+        return "BLE OK #" + lastSeq;
     }
 
     public function getIsConnected() as Lang.Boolean {

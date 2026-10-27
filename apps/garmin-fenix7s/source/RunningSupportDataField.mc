@@ -14,6 +14,8 @@ class RunningSupportDataField extends WatchUi.DataField {
     private var seqNumber as Lang.Number = 0;
     private var lastValidLat as Lang.Double = 40.4168d;
     private var lastValidLng as Lang.Double = -3.7038d;
+    private var lastHeartRate as Lang.Number = 0;
+    private var lastSpeedMps as Lang.Float = 0.0;
     private var isServiceEnabled as Lang.Boolean = true;
 
     function initialize() {
@@ -31,10 +33,14 @@ class RunningSupportDataField extends WatchUi.DataField {
     }
 
     hidden function checkServiceEnabled() as Void {
-        var val = Application.Properties.getValue("ServiceEnabled");
-        if (val != null && val instanceof Lang.Boolean) {
-            isServiceEnabled = val;
-        } else {
+        try {
+            var val = Application.Properties.getValue("ServiceEnabled");
+            if (val != null && val instanceof Lang.Boolean) {
+                isServiceEnabled = val;
+            } else {
+                isServiceEnabled = true;
+            }
+        } catch (ex) {
             isServiceEnabled = true;
         }
     }
@@ -45,67 +51,104 @@ class RunningSupportDataField extends WatchUi.DataField {
             return; // Radio silence when disabled
         }
 
-        seqNumber++;
+        try {
+            seqNumber++;
 
-        // 1. Position & GPS Quality
-        var pos = Position.getInfo();
-        var gpsQuality = 0;
-        var elevationM = 0.0f;
+            // 1. Position & GPS Quality from native activity or Position module
+            var gpsQuality = 0;
+            var elevationM = 0.0;
 
-        if (pos != null && pos.position != null) {
-            var degs = pos.position.toDegrees();
-            lastValidLat = degs[0];
-            lastValidLng = degs[1];
-            gpsQuality = (pos.accuracy != null) ? pos.accuracy : 4;
-            if (pos.altitude != null) {
-                elevationM = pos.altitude;
+            if (info has :currentLocation && info.currentLocation != null) {
+                var degs = info.currentLocation.toDegrees();
+                lastValidLat = degs[0];
+                lastValidLng = degs[1];
+                gpsQuality = (info has :currentLocationAccuracy && info.currentLocationAccuracy != null) ? info.currentLocationAccuracy : 4;
+                if (info has :altitude && info.altitude != null) {
+                    elevationM = info.altitude.toFloat();
+                }
+            } else {
+                try {
+                    var pos = Position.getInfo();
+                    if (pos != null && pos.position != null) {
+                        var degs = pos.position.toDegrees();
+                        lastValidLat = degs[0];
+                        lastValidLng = degs[1];
+                        gpsQuality = (pos.accuracy != null) ? pos.accuracy : 4;
+                        if (pos.altitude != null) {
+                            elevationM = pos.altitude.toFloat();
+                        }
+                    }
+                } catch (posEx) {
+                    // Position fallback ignored
+                }
             }
-        }
 
-        // 2. Running Biometrics
-        var heartRate = (info.currentHeartRate != null) ? info.currentHeartRate : 0;
-        var speedMps = (info.currentSpeed != null) ? info.currentSpeed : 0.0f;
-        var cadence = (info.currentCadence != null) ? info.currentCadence : 0;
-        var totalDistanceM = (info.elapsedDistance != null) ? info.elapsedDistance : 0.0f;
-        var elapsedSeconds = (info.timerTime != null) ? (info.timerTime / 1000) : 0;
+            // 2. Running Biometrics
+            var heartRate = (info.currentHeartRate != null) ? info.currentHeartRate : 0;
+            var speedMps = (info.currentSpeed != null) ? info.currentSpeed.toFloat() : 0.0;
+            var cadence = (info.currentCadence != null) ? info.currentCadence : 0;
+            var totalDistanceM = (info.elapsedDistance != null) ? info.elapsedDistance.toFloat() : 0.0;
+            var elapsedSeconds = (info.timerTime != null) ? (info.timerTime / 1000) : 0;
 
-        var paceSecPerKm = 0.0f;
-        if (speedMps > 0.1f) {
-            paceSecPerKm = 1000.0f / speedMps;
-        }
+            lastHeartRate = heartRate;
+            lastSpeedMps = speedMps;
 
-        var epochMs = Time.now().value().toLong() * 1000L;
-
-        // 3. Assemble Telemetry Dictionary adhering to schema
-        var payload = {
-            "type" => "TELEMETRY_SNAPSHOT",
-            "seq" => seqNumber,
-            "timestamp" => epochMs,
-            "coordinates" => {
-                "lat" => lastValidLat,
-                "lng" => lastValidLng,
-                "elevationM" => elevationM,
-                "gpsQuality" => gpsQuality
-            },
-            "metrics" => {
-                "heartRateBpm" => heartRate,
-                "speedMps" => speedMps,
-                "paceSecPerKm" => paceSecPerKm,
-                "cadenceSpm" => cadence,
-                "totalDistanceM" => totalDistanceM,
-                "elapsedSeconds" => elapsedSeconds
-            },
-            "deviceHealth" => {
-                "watchBatteryPct" => System.getSystemStats().battery.toNumber()
+            var paceSecPerKm = 0.0;
+            if (speedMps > 0.1) {
+                paceSecPerKm = 1000.0 / speedMps;
             }
-        };
 
-        transmitter.transmit(payload);
+            var epochMs = Time.now().value().toLong() * 1000L;
+
+            // 3. Assemble Telemetry Dictionary adhering to schema
+            var payload = {
+                "type" => "TELEMETRY_SNAPSHOT",
+                "seq" => seqNumber,
+                "timestamp" => epochMs,
+                "coordinates" => {
+                    "lat" => lastValidLat,
+                    "lng" => lastValidLng,
+                    "elevationM" => elevationM,
+                    "gpsQuality" => gpsQuality
+                },
+                "metrics" => {
+                    "heartRateBpm" => heartRate,
+                    "speedMps" => speedMps,
+                    "paceSecPerKm" => paceSecPerKm,
+                    "cadenceSpm" => cadence,
+                    "totalDistanceM" => totalDistanceM,
+                    "elapsedSeconds" => elapsedSeconds
+                },
+                "deviceHealth" => {
+                    "watchBatteryPct" => System.getSystemStats().battery.toNumber()
+                }
+            };
+
+            transmitter.transmit(payload);
+        } catch (ex) {
+            System.println("[DATAFIELD] Error in compute(): " + ex.getErrorMessage());
+        }
     }
 
     // Render hook: native data field display plus top cheer banner overlay
     function onUpdate(dc as Graphics.Dc) as Void {
-        View.onUpdate(dc);
+        var bgColor = getBackgroundColor();
+        var fgColor = (bgColor == Graphics.COLOR_BLACK) ? Graphics.COLOR_WHITE : Graphics.COLOR_BLACK;
+
+        dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
+
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+
+        var header = "LIVE RUN #" + seqNumber;
+        dc.drawText(width / 2, 4, Graphics.FONT_XTINY, header, Graphics.TEXT_JUSTIFY_CENTER);
+
+        var hrStr = (lastHeartRate > 0) ? (lastHeartRate.toString() + " bpm") : "-- bpm";
+        dc.drawText(width / 2, height / 2 - 14, Graphics.FONT_MEDIUM, hrStr, Graphics.TEXT_JUSTIFY_CENTER);
+
+        var txStr = transmitter.getStatusString();
+        dc.drawText(width / 2, height - 24, Graphics.FONT_XTINY, txStr, Graphics.TEXT_JUSTIFY_CENTER);
+
         if (overlay != null && overlay.isActive()) {
             overlay.draw(dc);
         }
