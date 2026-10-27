@@ -1,35 +1,37 @@
 import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.Attention;
-import Toybox.Timer;
+import Toybox.System;
 import Toybox.Lang;
 
 class NotificationBannerOverlay {
     private var activeMessage as Lang.Dictionary?;
     private var isVisible as Lang.Boolean = false;
-    private var dismissTimer as Timer.Timer?;
+    private var showTimestampMs as Lang.Number = 0;
 
     function initialize() {
-        dismissTimer = new Timer.Timer();
+        isVisible = false;
+        activeMessage = null;
+        showTimestampMs = 0;
     }
 
     public function showCheer(cheerData as Lang.Dictionary) as Void {
         activeMessage = cheerData;
         isVisible = true;
+        showTimestampMs = System.getTimer();
 
         // Trigger 2 haptic vibration pulses
         if (Attention has :vibrate) {
-            var vibeData = [
-                new Attention.VibeProfile(50, 200),
-                new Attention.VibeProfile(0, 100),
-                new Attention.VibeProfile(75, 300)
-            ];
-            Attention.vibrate(vibeData);
-        }
-
-        // 7-second auto-dismissal
-        if (dismissTimer != null) {
-            dismissTimer.start(method(:dismiss), 7000, false);
+            try {
+                var vibeData = [
+                    new Attention.VibeProfile(50, 200),
+                    new Attention.VibeProfile(0, 100),
+                    new Attention.VibeProfile(75, 300)
+                ];
+                Attention.vibrate(vibeData);
+            } catch (ex) {
+                System.println("[OVERLAY] Error vibrate: " + ex.getErrorMessage());
+            }
         }
 
         WatchUi.requestUpdate();
@@ -43,6 +45,14 @@ class NotificationBannerOverlay {
 
     public function draw(dc as Graphics.Dc) as Void {
         if (!isVisible || activeMessage == null) {
+            return;
+        }
+
+        // Auto-dismissal after 7 seconds without using Timer.Timer
+        var now = System.getTimer();
+        if (now - showTimestampMs > 7000) {
+            isVisible = false;
+            activeMessage = null;
             return;
         }
 

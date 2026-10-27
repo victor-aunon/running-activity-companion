@@ -1,24 +1,21 @@
 import Toybox.Communications;
 import Toybox.System;
-import Toybox.Timer;
 import Toybox.Lang;
 
 class BleTransmitter {
     private var isConnected as Lang.Boolean = true;
     private var isTransmitting as Lang.Boolean = false;
+    private var transmitStartTimeMs as Lang.Number = 0;
     private var ringBuffer as Lang.Array<Lang.Dictionary> = [];
     private const MAX_BUFFER_SIZE = 10;
-    private var retryTimer as Timer.Timer?;
-    private var watchdogTimer as Timer.Timer?;
     private var cheerCallback as Method?;
     private var lastSeq as Lang.Number = 0;
 
     function initialize() {
         ringBuffer = [];
-        retryTimer = new Timer.Timer();
-        watchdogTimer = new Timer.Timer();
         isConnected = true;
         isTransmitting = false;
+        transmitStartTimeMs = 0;
         setupListener();
     }
 
@@ -40,27 +37,26 @@ class BleTransmitter {
             lastSeq = payload["seq"] as Lang.Number;
         }
 
+        var now = System.getTimer();
+        // Si una transmisión previa se queda congelada más de 3 segundos, liberar canal
+        if (isTransmitting && (now - transmitStartTimeMs > 3000)) {
+            System.println("[BLE] Transmisión anterior expirada (>3s), liberando canal");
+            isTransmitting = false;
+        }
+
         if (!isTransmitting) {
             isTransmitting = true;
-            if (watchdogTimer != null) {
-                watchdogTimer.start(method(:onWatchdogTimeout), 2500, false);
-            }
+            transmitStartTimeMs = now;
             var listener = new CommListener(self, payload);
             try {
                 Communications.transmit(payload, null, listener);
             } catch (ex) {
-                System.println("[BLE] Error al invocar transmit: " + ex.getErrorMessage());
+                System.println("[BLE] Error transmit: " + ex.getErrorMessage());
                 onTransmitFailed(payload);
             }
         } else {
             bufferPayload(payload);
         }
-    }
-
-    public function onWatchdogTimeout() as Void {
-        System.println("[BLE] Watchdog: callback demorado, liberando canal de transmision");
-        isTransmitting = false;
-        flushBuffer();
     }
 
     public function bufferPayload(payload as Lang.Dictionary) as Void {
@@ -72,36 +68,15 @@ class BleTransmitter {
     }
 
     public function onTransmitSuccess() as Void {
-        if (watchdogTimer != null) {
-            watchdogTimer.stop();
-        }
         isTransmitting = false;
         isConnected = true;
         flushBuffer();
     }
 
     public function onTransmitFailed(failedPayload as Lang.Dictionary) as Void {
-        if (watchdogTimer != null) {
-            watchdogTimer.stop();
-        }
         isTransmitting = false;
         isConnected = false;
         bufferPayload(failedPayload);
-        scheduleRetry();
-    }
-
-    hidden function scheduleRetry() as Void {
-        if (retryTimer != null) {
-            retryTimer.start(method(:onRetryTrigger), 2000, false);
-        }
-    }
-
-    public function onRetryTrigger() as Void {
-        if (!isTransmitting && ringBuffer.size() > 0) {
-            var nextPayload = ringBuffer[0];
-            ringBuffer = ringBuffer.slice(1, ringBuffer.size());
-            transmit(nextPayload);
-        }
     }
 
     hidden function flushBuffer() as Void {
@@ -113,7 +88,7 @@ class BleTransmitter {
     }
 
     public function onPhoneAppMessage(msg as Communications.PhoneAppMessage) as Void {
-        System.println("[BLE] Received incoming PhoneAppMessage from companion");
+        System.println("[BLE] Received PhoneAppMessage from companion");
         var data = msg.data;
         if (cheerCallback != null && data instanceof Lang.Dictionary) {
             cheerCallback.invoke(data as Lang.Dictionary);
@@ -123,7 +98,7 @@ class BleTransmitter {
     public function onMailboxMessage(mailIter as Communications.MailboxIterator) as Void {
         var msg = mailIter.next();
         while (msg != null) {
-            System.println("[BLE] Received incoming Mailbox packet from companion");
+            System.println("[BLE] Received Mailbox packet from companion");
             if (cheerCallback != null && msg instanceof Lang.Dictionary) {
                 cheerCallback.invoke(msg as Lang.Dictionary);
             }
