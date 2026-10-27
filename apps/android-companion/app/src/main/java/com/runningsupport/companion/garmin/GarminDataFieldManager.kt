@@ -273,7 +273,7 @@ class GarminDataFieldManager(
             try {
                 ciq.getApplicationInfo(GARMIN_APP_UUID, device, object : ConnectIQ.IQApplicationInfoListener {
                     override fun onApplicationInfoReceived(app: IQApp?) {
-                        logDiagnostic("✓ App verificada en reloj por GCM: ${app?.displayName ?: "RunningSupport"} v${app?.version ?: 1}")
+                        logDiagnostic("✓ App verificada en reloj por GCM: ${app?.displayName ?: "RunningSupport"}")
                     }
 
                     override fun onApplicationNotInstalled(applicationId: String?) {
@@ -285,7 +285,7 @@ class GarminDataFieldManager(
             }
 
             ciq.registerForAppEvents(device, garminApp, object : ConnectIQ.IQApplicationEventListener {
-                override fun onMessage(dev: IQDevice?, app: IQApp?, messageList: MutableList<Any>?, status: ConnectIQ.IQMessageStatus?) {
+                override fun onMessageReceived(dev: IQDevice?, app: IQApp?, messageList: MutableList<Any>?, status: ConnectIQ.IQMessageStatus?) {
                     logDiagnostic("Mensaje ConnectIQ: status=$status, count=${messageList?.size ?: 0}")
                     if (messageList != null && messageList.isNotEmpty()) {
                         for (msg in messageList) {
