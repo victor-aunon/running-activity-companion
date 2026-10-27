@@ -119,6 +119,7 @@ apps/garmin-fenix7s/bin/
 *.der
 *.pem
 developer_key.*
+developer_key
 
 # Connect IQ local project settings
 projectSettings.xml
