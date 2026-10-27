@@ -364,20 +364,10 @@ class GarminDataFieldManager(
         try {
             val cheerMap = jsonToMap(testPayload)
             ciq.sendMessage(device, garminApp, cheerMap) { dev, _, status ->
-                val resultText = when (status) {
-                    ConnectIQ.IQMessageStatus.SUCCESS ->
-                        "✓ ÉXITO: Mensaje entregado al reloj (${dev?.friendlyName})"
-                    ConnectIQ.IQMessageStatus.FAILURE_DURING_TRANSFER ->
-                        "✗ ERROR: Fallo de transferencia BLE hacia el reloj"
-                    ConnectIQ.IQMessageStatus.FAILURE_INVALID_DEVICE ->
-                        "✗ ERROR: Reloj no válido o desconectado en GCM"
-                    ConnectIQ.IQMessageStatus.FAILURE_DEVICE_NOT_REACHABLE ->
-                        "✗ ERROR: Reloj fuera de cobertura Bluetooth"
-                    ConnectIQ.IQMessageStatus.FAILURE_INVALID_FORMAT ->
-                        "✗ ERROR: Formato de mensaje no aceptado"
-                    ConnectIQ.IQMessageStatus.FAILURE_UNKNOWN ->
-                        "✗ ERROR: Fallo desconocido reportado por Garmin Connect"
-                    else -> "Estado: $status"
+                val resultText = if (status == ConnectIQ.IQMessageStatus.SUCCESS) {
+                    "✓ ÉXITO: Mensaje entregado al reloj (${dev?.friendlyName})"
+                } else {
+                    "✗ ERROR al enviar al reloj: $status"
                 }
 
                 logDiagnostic("Resultado prueba: $resultText")
