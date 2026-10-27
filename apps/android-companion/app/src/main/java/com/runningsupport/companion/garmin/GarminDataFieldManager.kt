@@ -229,17 +229,19 @@ class GarminDataFieldManager(
     private fun registerDeviceListeners(device: IQDevice) {
         val ciq = connectIQ ?: return
         try {
-            ciq.registerForDeviceEvents(device) { dev, newStatus ->
-                val isConnected = (newStatus == IQDevice.IQDeviceStatus.CONNECTED)
-                logDiagnostic("Estado Bluetooth reloj: ${dev?.friendlyName} -> $newStatus")
-                _diagnosticsState.update { it.copy(isDeviceConnected = isConnected) }
-                connectionStateListener?.invoke(isConnected)
+            ciq.registerForDeviceEvents(device, object : ConnectIQ.IQDeviceEventListener {
+                override fun onDeviceStatusChanged(dev: IQDevice?, newStatus: IQDevice.IQDeviceStatus?) {
+                    val isConnected = (newStatus == IQDevice.IQDeviceStatus.CONNECTED)
+                    logDiagnostic("Estado Bluetooth reloj: ${dev?.friendlyName} -> $newStatus")
+                    _diagnosticsState.update { it.copy(isDeviceConnected = isConnected) }
+                    connectionStateListener?.invoke(isConnected)
 
-                if (isConnected && dev != null) {
-                    targetDevice = dev
-                    registerAppEvents(dev)
+                    if (isConnected && dev != null) {
+                        targetDevice = dev
+                        registerAppEvents(dev)
+                    }
                 }
-            }
+            })
 
             checkDeviceConnection(device)
             registerAppEvents(device)
@@ -266,7 +268,7 @@ class GarminDataFieldManager(
         val ciq = connectIQ ?: return
         try {
             logDiagnostic("Registrando listener de la app DataField (${garminApp.applicationId})")
-            
+
             // Comprobar si GCM reconoce la app instalada en el reloj
             try {
                 ciq.getApplicationInfo(GARMIN_APP_UUID, device, object : ConnectIQ.IQApplicationInfoListener {
@@ -282,14 +284,16 @@ class GarminDataFieldManager(
                 logDiagnostic("Aviso getApplicationInfo: ${e.message}")
             }
 
-            ciq.registerForAppEvents(device, garminApp) { dev, app, messageList, status ->
-                logDiagnostic("Mensaje ConnectIQ: status=$status, count=${messageList?.size ?: 0}")
-                if (messageList != null && messageList.isNotEmpty()) {
-                    for (msg in messageList) {
-                        handleIncomingGarminPayload(msg)
+            ciq.registerForAppEvents(device, garminApp, object : ConnectIQ.IQApplicationEventListener {
+                override fun onMessage(dev: IQDevice?, app: IQApp?, messageList: MutableList<Any>?, status: ConnectIQ.IQMessageStatus?) {
+                    logDiagnostic("Mensaje ConnectIQ: status=$status, count=${messageList?.size ?: 0}")
+                    if (messageList != null && messageList.isNotEmpty()) {
+                        for (msg in messageList) {
+                            handleIncomingGarminPayload(msg)
+                        }
                     }
                 }
-            }
+            })
             _diagnosticsState.update { it.copy(isAppRegistered = true) }
         } catch (e: Exception) {
             logDiagnostic("Error registrando listener DataField: ${e.message}")
@@ -427,17 +431,19 @@ class GarminDataFieldManager(
 
         try {
             val cheerMap = jsonToMap(testPayload)
-            ciq.sendMessage(device, garminApp, cheerMap) { dev, _, status ->
-                val resultText = if (status == ConnectIQ.IQMessageStatus.SUCCESS) {
-                    "✓ ÉXITO: Mensaje entregado al reloj (${dev?.friendlyName})"
-                } else {
-                    "✗ ERROR al enviar al reloj: $status"
-                }
+            ciq.sendMessage(device, garminApp, cheerMap, object : ConnectIQ.IQSendMessageListener {
+                override fun onMessageStatus(dev: IQDevice?, app: IQApp?, status: ConnectIQ.IQMessageStatus?) {
+                    val resultText = if (status == ConnectIQ.IQMessageStatus.SUCCESS) {
+                        "✓ ÉXITO: Mensaje entregado al reloj (${dev?.friendlyName})"
+                    } else {
+                        "✗ ERROR al enviar al reloj: $status"
+                    }
 
-                logDiagnostic("Resultado prueba: $resultText")
-                _diagnosticsState.update { it.copy(lastTestResult = resultText) }
-                onResult(resultText)
-            }
+                    logDiagnostic("Resultado prueba: $resultText")
+                    _diagnosticsState.update { it.copy(lastTestResult = resultText) }
+                    onResult(resultText)
+                }
+            })
         } catch (e: Exception) {
             val err = "Excepción al enviar prueba: ${e.message}"
             logDiagnostic(err)
@@ -453,11 +459,13 @@ class GarminDataFieldManager(
             val cheerMap = jsonToMap(cheerPayload)
             logDiagnostic("Transmitiendo ánimo a ${device.friendlyName}: ${cheerPayload.optString("body")}")
             try {
-                ciq.sendMessage(device, garminApp, cheerMap) { _, _, status ->
-                    val success = (status == ConnectIQ.IQMessageStatus.SUCCESS)
-                    logDiagnostic("Resultado envío ánimo: $status")
-                    onResult(success)
-                }
+                ciq.sendMessage(device, garminApp, cheerMap, object : ConnectIQ.IQSendMessageListener {
+                    override fun onMessageStatus(dev: IQDevice?, app: IQApp?, status: ConnectIQ.IQMessageStatus?) {
+                        val success = (status == ConnectIQ.IQMessageStatus.SUCCESS)
+                        logDiagnostic("Resultado envío ánimo: $status")
+                        onResult(success)
+                    }
+                })
             } catch (e: Exception) {
                 logDiagnostic("Error enviando ánimo: ${e.message}")
                 onResult(false)
