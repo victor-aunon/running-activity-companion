@@ -25,8 +25,11 @@ function updateCheerList(prev: CheerItem[], msg: any): CheerItem[] {
     const updated = [...prev];
     updated[index] = {
       ...updated[index],
-      status: msg.status,
-      runnerReplyText: msg.runnerReplyText,
+      senderName: msg.senderName || updated[index].senderName,
+      body: msg.body || updated[index].body,
+      status: msg.status || updated[index].status,
+      runnerReplyText: msg.runnerReplyText || updated[index].runnerReplyText,
+      timestamp: msg.timestamp || updated[index].timestamp,
     };
     return updated;
   }
@@ -35,7 +38,7 @@ function updateCheerList(prev: CheerItem[], msg: any): CheerItem[] {
       notificationId: msg.notificationId,
       senderName: msg.senderName || 'Espectador',
       body: msg.body || '¡Ánimo!',
-      status: msg.status,
+      status: msg.status || 'ENVIADO',
       runnerReplyText: msg.runnerReplyText,
       timestamp: msg.timestamp || Date.now(),
     },
@@ -137,7 +140,7 @@ interface CheerSenderState {
 }
 
 function executeCheerSend(state: CheerSenderState, presetId: CheerPreset, body: string) {
-  const { client, sessionId, pin, senderName, rateLimitSeconds, setSubmitting, setErrorMsg } =
+  const { client, sessionId, pin, senderName, rateLimitSeconds, setSubmitting, setErrorMsg, setCheers } =
     state;
   if (rateLimitSeconds > 0) return;
   if (!senderName.trim()) {
@@ -153,6 +156,18 @@ function executeCheerSend(state: CheerSenderState, presetId: CheerPreset, body: 
   const res = sendCheerPacket({ client, sessionId, pin, senderName }, presetId, body);
   if (!res.success) {
     setErrorMsg('No hay conexión con el servidor. Reconectando...');
+  } else if (res.notificationId) {
+    const localCheer: CheerItem = {
+      notificationId: res.notificationId,
+      senderName: senderName.trim(),
+      body: body.substring(0, 50),
+      status: 'ENVIADO',
+      timestamp: Date.now(),
+    };
+    setCheers((prev) => [
+      localCheer,
+      ...prev.filter((c) => c.notificationId !== res.notificationId),
+    ]);
   }
   setSubmitting(false);
 }

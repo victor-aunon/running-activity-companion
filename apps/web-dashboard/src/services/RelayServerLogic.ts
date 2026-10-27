@@ -13,6 +13,7 @@ interface RoomSession {
   hasLoggedFirstTelemetry?: boolean;
   verbose?: boolean;
   pathHistory: [number, number][];
+  cheersHistory: Map<string, any>;
 }
 
 interface RateLimitTracker {
@@ -131,14 +132,21 @@ function handleDispatchCheer(
   console.log(`✅ [RELAY] PIN válido para sesión "${room.token}"`);
   forwardCheerToGateway(room, msg);
 
+  const cheerData = {
+    notificationId: msg.notificationId,
+    sessionId: msg.sessionId,
+    senderName: msg.senderName || 'Espectador',
+    body: msg.body || '¡Ánimo!',
+    status: 'ENVIADO',
+    timestamp: now,
+  };
+  room.cheersHistory.set(msg.notificationId, cheerData);
+
   broadcastToSpectators(
     room,
     JSON.stringify({
       type: 'CHEER_STATUS_UPDATE',
-      notificationId: msg.notificationId,
-      sessionId: msg.sessionId,
-      status: 'ENVIADO',
-      timestamp: now,
+      ...cheerData,
     }),
   );
 }
@@ -219,9 +227,22 @@ function processTypedMessage(
       handleNowPlayingUpdate(room, msg);
       break;
     case 'SESSION_STATE_CHANGED':
-    case 'CHEER_STATUS_UPDATE':
       broadcastToSpectators(room, JSON.stringify(msg));
       break;
+    case 'CHEER_STATUS_UPDATE': {
+      const cached = room.cheersHistory?.get(msg.notificationId);
+      const enriched = {
+        ...msg,
+        senderName: msg.senderName || cached?.senderName || 'Espectador',
+        body: msg.body || cached?.body || '¡Ánimo!',
+      };
+      if (cached) {
+        cached.status = msg.status || cached.status;
+        if (msg.runnerReplyText) cached.runnerReplyText = msg.runnerReplyText;
+      }
+      broadcastToSpectators(room, JSON.stringify(enriched));
+      break;
+    }
   }
 }
 
@@ -299,6 +320,11 @@ function registerSpectatorConnection(
   }
   if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
   if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
+  if (room.cheersHistory && room.cheersHistory.size > 0) {
+    for (const cheer of room.cheersHistory.values()) {
+      ws.send(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+    }
+  }
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
@@ -360,7 +386,14 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     const token = rawToken.trim().toLowerCase();
     let room = rooms.get(token);
     if (!room) {
-      room = { token, gatewayWs: null, spectators: new Map(), verbose, pathHistory: [] };
+      room = {
+        token,
+        gatewayWs: null,
+        spectators: new Map(),
+        verbose,
+        pathHistory: [],
+        cheersHistory: new Map(),
+      };
       rooms.set(token, room);
     }
     return room;

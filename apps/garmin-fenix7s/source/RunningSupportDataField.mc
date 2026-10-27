@@ -27,11 +27,7 @@ class RunningSupportDataField extends WatchUi.DataField {
     }
 
     public function onCheerReceived(cheerData as Lang.Dictionary) as Void {
-        if (overlay != null) {
-            overlay.showCheer(cheerData);
-        }
-
-        // Emitir confirmación inmediata a la nube de que el ánimo se muestra en el reloj
+        // El ánimo se muestra nativamente en el reloj a través de Smart Notification de Android
         var notifId = cheerData.get("notificationId");
         if (notifId != null && transmitter != null) {
             var ackPayload = {
@@ -41,23 +37,6 @@ class RunningSupportDataField extends WatchUi.DataField {
                 "timestamp" => Time.now().value().toLong() * 1000L
             };
             transmitter.transmit(ackPayload);
-        }
-    }
-
-    // Si el corredor pulsa el botón LAP mientras hay un ánimo en pantalla, envía agradecimiento
-    function onTimerLap() as Void {
-        if (overlay != null && overlay.isActive()) {
-            var notifId = overlay.getActiveNotificationId();
-            if (notifId != null && transmitter != null) {
-                var replyPayload = {
-                    "type" => "CHEER_STATUS_UPDATE",
-                    "notificationId" => notifId,
-                    "status" => "AGRADECIDO",
-                    "timestamp" => Time.now().value().toLong() * 1000L
-                };
-                transmitter.transmit(replyPayload);
-                overlay.dismiss();
-            }
         }
     }
 
@@ -177,10 +156,6 @@ class RunningSupportDataField extends WatchUi.DataField {
 
         var txStr = transmitter.getStatusString();
         dc.drawText(width / 2, height - 24, Graphics.FONT_XTINY, txStr, Graphics.TEXT_JUSTIFY_CENTER);
-
-        if (overlay != null && overlay.isActive()) {
-            overlay.draw(dc);
-        }
     }
 
     public function getIsServiceEnabled() as Lang.Boolean {
