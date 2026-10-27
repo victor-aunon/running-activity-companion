@@ -29,7 +29,7 @@ class CheerActionReceiver : BroadcastReceiver() {
             val db = AppDatabase.getDatabase(context)
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    db.cheerDao().updateCheerStatus(notifId, "AGRADECIDO", System.currentTimeMillis())
+                    db.cheerDao().updateStatus(notifId, "AGRADECIDO", "Víctor te lo agradece")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error updating cheer status in DB: ${e.message}")
                 }
