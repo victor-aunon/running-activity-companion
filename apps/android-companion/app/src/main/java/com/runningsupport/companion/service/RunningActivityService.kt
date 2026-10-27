@@ -140,22 +140,6 @@ class RunningActivityService : Service() {
     }
 
     private fun setupCheersListener(sessionId: String) {
-        val cheersChannelId = "running_activity_cheers_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && notificationManager != null) {
-            val channel = NotificationChannel(
-                cheersChannelId,
-                "Ánimos en Carrera",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notificaciones interactivas de ánimos recibidos durante la actividad"
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 250, 100, 250)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
         serviceScope.launch {
             gatewayClient?.incomingCheers?.collect { cheerJson ->
                 val notifId = cheerJson.optString("notificationId")
@@ -178,42 +162,14 @@ class RunningActivityService : Service() {
                 db.cheerDao().insertCheer(cheer)
 
                 // 1. Emitir notificación inteligente de Android (GCM la replica en el reloj sobre cualquier pantalla)
-                try {
-                    val thankIntent = Intent(this@RunningActivityService, CheerActionReceiver::class.java).apply {
-                        action = CheerActionReceiver.ACTION_THANK_CHEER
-                        putExtra(CheerActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
-                        putExtra(CheerActionReceiver.EXTRA_SESSION_ID, sessionId)
-                    }
-                    val thankPendingIntent = PendingIntent.getBroadcast(
-                        this@RunningActivityService,
-                        notifId.hashCode(),
-                        thankIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-
-                    val thankAction = NotificationCompat.Action.Builder(
-                        android.R.drawable.ic_menu_send,
-                        "Agradecer",
-                        thankPendingIntent
-                    ).build()
-
-                    val notification = NotificationCompat.Builder(this@RunningActivityService, cheersChannelId)
-                        .setSmallIcon(android.R.drawable.ic_dialog_info)
-                        .setContentTitle("📣 Ánimo de $sender")
-                        .setContentText("\"$body\"")
-                        .setStyle(NotificationCompat.BigTextStyle().bigText("\"$body\""))
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setDefaults(NotificationCompat.DEFAULT_ALL)
-                        .setAutoCancel(true)
-                        .setTimeoutAfter(ttl * 1000)
-                        .addAction(thankAction)
-                        .build()
-
-                    notificationManager?.notify(notifId.hashCode(), notification)
-                    Log.i(TAG, "Notificación de ánimo publicada para GCM/Reloj: $sender - $body")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error emitiendo notificación de sistema para ánimo: ${e.message}")
-                }
+                postCheerNotification(
+                    context = this@RunningActivityService,
+                    notificationId = notifId,
+                    sessionId = sessionId,
+                    senderName = sender,
+                    body = body,
+                    ttlSeconds = ttl
+                )
 
                 // 2. Confirmar a la nube que el ánimo ya se ha entregado en el reloj
                 serviceScope.launch {
@@ -346,6 +302,7 @@ class RunningActivityService : Service() {
     }
 
     companion object {
+        const val CHEERS_CHANNEL_ID = "running_activity_cheers_channel"
         const val EXTRA_SERVER_URL = "extra_server_url"
         const val EXTRA_TOKEN = "extra_token"
         const val EXTRA_SESSION_ID = "extra_session_id"
@@ -367,6 +324,82 @@ class RunningActivityService : Service() {
 
         private val _garminDiagnosticsState = MutableStateFlow(com.runningsupport.companion.garmin.GarminDiagnostics())
         val garminDiagnosticsState = _garminDiagnosticsState.asStateFlow()
+
+        fun postCheerNotification(
+            context: Context,
+            notificationId: String,
+            sessionId: String,
+            senderName: String,
+            body: String,
+            ttlSeconds: Long = 60
+        ) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && notificationManager != null) {
+                val channel = NotificationChannel(
+                    CHEERS_CHANNEL_ID,
+                    "Ánimos en Carrera",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Notificaciones interactivas de ánimos recibidos durante la actividad"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 100, 250)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            try {
+                val thankIntent = Intent(context, CheerActionReceiver::class.java).apply {
+                    action = CheerActionReceiver.ACTION_THANK_CHEER
+                    putExtra(CheerActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                    putExtra(CheerActionReceiver.EXTRA_SESSION_ID, sessionId)
+                }
+                val thankPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    notificationId.hashCode(),
+                    thankIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val thankAction = NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_menu_send,
+                    "Agradecer",
+                    thankPendingIntent
+                ).build()
+
+                val notification = NotificationCompat.Builder(context, CHEERS_CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("📣 Ánimo de $senderName")
+                    .setContentText("\"$body\"")
+                    .setStyle(NotificationCompat.BigTextStyle().bigText("\"$body\""))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setDefaults(NotificationCompat.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(ttlSeconds * 1000)
+                    .addAction(thankAction)
+                    .build()
+
+                notificationManager?.notify(notificationId.hashCode(), notification)
+                Log.i(TAG, "Notificación publicada para GCM/Reloj: $senderName - $body")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error emitiendo notificación de sistema para ánimo: ${e.message}")
+            }
+        }
+
+        fun sendTestCheerNotification(context: Context, sessionId: String = "carrera-victor"): String {
+            val testId = "test-${System.currentTimeMillis()}"
+            val sender = "Prueba Companion"
+            val body = "¡Mucho ánimo Víctor! Notificación inteligente de prueba"
+            postCheerNotification(
+                context = context,
+                notificationId = testId,
+                sessionId = sessionId,
+                senderName = sender,
+                body = body,
+                ttlSeconds = 60
+            )
+            return "Notificación de prueba enviada al reloj"
+        }
 
         fun sendGarminTestPing(onResult: (String) -> Unit) {
             val mgr = activeInstance?.garminManager

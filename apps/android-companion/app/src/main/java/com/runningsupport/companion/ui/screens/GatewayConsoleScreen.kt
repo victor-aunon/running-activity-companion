@@ -33,6 +33,7 @@ fun GatewayConsoleScreen(
     serverUrl: String,
     garminDiagnostics: GarminDiagnostics = GarminDiagnostics(),
     onSendTestPing: () -> Unit = {},
+    onSendTestNotification: () -> Unit = {},
     onSessionNameChange: (String) -> Unit,
     onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
@@ -409,6 +410,15 @@ fun GatewayConsoleScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Probar Conexión con Reloj (Test Ping)")
+                    }
+
+                    OutlinedButton(
+                        onClick = onSendTestNotification,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F172A)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Enviar Notificación de Prueba (Smart Notification)")
                     }
 
                     if (garminDiagnostics.logs.isNotEmpty()) {

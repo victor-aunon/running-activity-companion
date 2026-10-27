@@ -138,6 +138,11 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this@MainActivity, result, Toast.LENGTH_LONG).show()
                     }
                 },
+                onSendTestNotification = {
+                    val activeSessionId = session?.sessionId ?: sessionName
+                    val msg = RunningActivityService.sendTestCheerNotification(this@MainActivity, activeSessionId)
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                },
                 onSessionNameChange = { newName ->
                     val clean = newName.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "-")
                     sessionName = clean
