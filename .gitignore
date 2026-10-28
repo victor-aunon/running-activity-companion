@@ -94,6 +94,8 @@ proguard/
 *.pro
 
 # Android Studio Navigation editor temp files
+.android/
+.superpowers/
 .navigation/
 
 # Android Studio captures

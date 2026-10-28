@@ -35,6 +35,7 @@ data class TelemetryEntity(
     val heartRate: Int,
     val cadence: Int,
     val stepCount: Int = 0,
+    val distanceM: Double = 0.0,
     val synced: Int = 0 // 0 = unsynced, 1 = synced
 ) {
     fun toJsonObject(): JSONObject {
@@ -55,7 +56,7 @@ data class TelemetryEntity(
                 put("paceSecPerKm", paceSecPerKm)
                 put("cadenceSpm", cadence)
                 put("stepCount", stepCount)
-                put("totalDistanceM", seq * 3.7)
+                put("totalDistanceM", if (distanceM > 0.0) distanceM else seq * 3.7)
                 put("elapsedSeconds", seq)
             })
             put("deviceHealth", JSONObject().apply {

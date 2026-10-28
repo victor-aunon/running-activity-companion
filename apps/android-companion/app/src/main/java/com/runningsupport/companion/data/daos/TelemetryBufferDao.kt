@@ -57,4 +57,28 @@ interface TelemetryBufferDao {
         )
     """)
     suspend fun pruneOldSessions()
+
+    @Query("SELECT * FROM workout_sessions WHERE sessionId = :sessionId LIMIT 1")
+    suspend fun getSession(sessionId: String): SessionEntity?
+
+    @Query("SELECT * FROM workout_sessions ORDER BY startedAt DESC LIMIT 1")
+    suspend fun getLatestSession(): SessionEntity?
+
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) ORDER BY timestamp ASC LIMIT 1")
+    suspend fun getFirstValidGpsPoint(sessionId: String): TelemetryEntity?
+
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLastValidGpsPoint(sessionId: String): TelemetryEntity?
+
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getAllTelemetryOrdered(sessionId: String): List<TelemetryEntity>
+
+    @Query("UPDATE workout_sessions SET status = :status, endedAt = :endedAt, totalDistanceM = :totalDistanceM, elapsedSeconds = :elapsedSeconds WHERE sessionId = :sessionId")
+    suspend fun updateSessionSummary(
+        sessionId: String,
+        status: String,
+        endedAt: Long?,
+        totalDistanceM: Double,
+        elapsedSeconds: Long
+    )
 }
