@@ -10,7 +10,11 @@
   "scripts": {
     "dev": "npm --workspace=apps/web-dashboard run dev",
     "build": "npm --workspace=packages/shared-contracts run build && npm --workspace=apps/web-dashboard run build",
-    "test": "npm --workspace=packages/shared-contracts run test && npm --workspace=apps/web-dashboard run test",
+    "test": "npm run test:contracts && npm run test:web && npm run test:android && npm run test:garmin",
+    "test:contracts": "npm --workspace=packages/shared-contracts run test",
+    "test:web": "npm --workspace=apps/web-dashboard run test",
+    "test:android": "node scripts/test-android.mjs",
+    "test:garmin": "node scripts/test-garmin.mjs",
     "simulate:runner": "npm --workspace=apps/web-dashboard run simulate:runner",
     "quality-gate": ".specify/scripts/bash/check-quality-gate.sh",
     "visual-gate": ".specify/scripts/bash/verify-stitch-design.sh"

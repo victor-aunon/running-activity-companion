@@ -120,6 +120,14 @@ class BleTransmitter {
     public function getIsConnected() as Lang.Boolean {
         return isConnected;
     }
+
+    public function getBufferSize() as Lang.Number {
+        return ringBuffer.size();
+    }
+
+    public function getBufferItem(index as Lang.Number) as Lang.Dictionary {
+        return ringBuffer[index];
+    }
 }
 
 class CommListener extends Communications.ConnectionListener {
