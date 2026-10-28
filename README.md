@@ -213,10 +213,109 @@ Si quieres probar todo el sistema en tu ordenador sin necesidad del reloj ni del
 
 ## 🧪 5. Control de Calidad y Tests
 
+### Comando Maestro de Test (Todo el Monorepo)
+Desde la raíz del repositorio, ejecuta:
 ```bash
-# Ejecutar suite de pruebas (unitarias, contratos y schemas)
-pnpm --filter web-dashboard test
+npm test
+# o con pnpm:
+pnpm test
+```
+Este comando encadena y valida automáticamente los 4 subsistemas del proyecto:
+1. `test:contracts`: Validación de esquemas y tipos JSON compartidos (`packages/shared-contracts`).
+2. `test:web`: Suite del servidor relay WebSocket y cuadro de mandos Next.js (`apps/web-dashboard`).
+3. `test:android`: Tests unitarios de Android Companion y compilación de la APK de depuración (`apps/android-companion`). Multiplataforma (macOS, Linux y Windows).
+4. `test:garmin`: Tests unitarios de Monkey C y compilación del binario `.prg` para Fenix 7S (`apps/garmin-fenix7s`).
 
+Para ejecutar pruebas individuales por subsistema:
+```bash
+npm run test:contracts   # Solo contratos compartidos
+npm run test:web         # Solo web dashboard y relay
+npm run test:android     # Solo Android (tests + APK)
+npm run test:garmin      # Solo Garmin Fenix 7S (tests + PRG)
+```
+
+---
+
+## 🛠 Guía de Configuración del Entorno para Tests (Para Desarrolladores y LLMs)
+
+Para que un desarrollador o un agente LLM pueda aprovisionar una máquina desde cero y ejecutar exitosamente `npm test`, deben cumplirse los siguientes prerrequisitos:
+
+### 1. Node.js (v20 o superior)
+- Instalar Node.js LTS mediante tu gestor de versiones preferido (`fnm`, `nvm`, `asdf`) o instalador oficial.
+- Instalar `pnpm` globalmente: `npm install -g pnpm`.
+
+### 2. Java Runtime (JDK 17)
+Tanto Android Gradle como el compilador `monkeyc` de Garmin requieren Java 17.
+- **macOS:**
+  ```bash
+  # Opción directa sin privilegios de root (Apple Silicon aarch64):
+  mkdir -p ~/.jdk && curl -L "https://api.adoptium.net/v3/binary/latest/17/ga/mac/aarch64/jdk/hotspot/normal/eclipse" | tar -xz -C ~/.jdk
+  export JAVA_HOME="$HOME/.jdk/$(ls ~/.jdk | grep jdk-17)/Contents/Home"
+  ```
+- **Linux (Ubuntu/Debian):**
+  ```bash
+  sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+  export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+  ```
+- **Windows:**
+  ```powershell
+  winget install EclipseAdoptium.Temurin.17.JDK
+  # o con Chocolatey:
+  choco install openjdk17
+  ```
+
+### 3. Android SDK (Command-line Tools & Platform 36)
+Para compilar la APK y correr los tests de Android Companion sin necesidad de la interfaz gráfica de Android Studio:
+1. Descarga e instala los **Android Command Line Tools**:
+   - **macOS:**
+     ```bash
+     mkdir -p ~/.android-sdk/cmdline-tools
+     curl -L -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"
+     unzip -q /tmp/cmdline-tools.zip -d ~/.android-sdk/cmdline-tools
+     mv ~/.android-sdk/cmdline-tools/cmdline-tools ~/.android-sdk/cmdline-tools/latest
+     rm /tmp/cmdline-tools.zip
+     ```
+   - **Linux:**
+     ```bash
+     mkdir -p ~/.android-sdk/cmdline-tools
+     curl -L -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+     unzip -q /tmp/cmdline-tools.zip -d ~/.android-sdk/cmdline-tools
+     mv ~/.android-sdk/cmdline-tools/cmdline-tools ~/.android-sdk/cmdline-tools/latest
+     rm /tmp/cmdline-tools.zip
+     ```
+   - **Windows:**
+     Descarga `commandlinetools-win-11076708_latest.zip` y descomprime en `%USERPROFILE%\.android-sdk\cmdline-tools\latest`.
+
+2. Instala la plataforma y build-tools con `sdkmanager`:
+   ```bash
+   yes | ~/.android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root="$HOME/.android-sdk" "platforms;android-36" "build-tools;35.0.0" "build-tools;34.0.0"
+   ```
+
+3. Crea o verifica `apps/android-companion/local.properties`:
+   ```properties
+   sdk.dir=/Users/tu_usuario/.android-sdk
+   ```
+   *(El script `scripts/test-android.mjs` lo detecta y genera automáticamente si detecta `~/.android-sdk`)*.
+
+### 4. Garmin Connect IQ SDK (`monkeyc`) y Definición de Dispositivo `fenix7s`
+Para compilar y testear la app de reloj:
+1. **Descarga el SDK de Connect IQ:**
+   Consulta la última versión en `https://developer.garmin.com/downloads/connect-iq/sdks/sdks.json` y descomprime en `~/.garmin/connectiq-sdk/` (o agrega la carpeta `bin/` al `PATH`).
+   - Crear un archivo vacío `~/.garmin/connectiq-sdk/bin/default.jungle` si el SDK no lo genera automáticamente.
+2. **Definiciones del dispositivo `fenix7s`:**
+   El compilador `monkeyc` busca las definiciones del dispositivo (`compiler.json`, layouts y simulador) en la carpeta de datos de Connect IQ:
+   - **macOS:** `~/Library/Application Support/Garmin/ConnectIQ/Devices/fenix7s/`
+   - **Linux:** `~/.Garmin/ConnectIQ/Devices/fenix7s/`
+   - **Windows:** `%APPDATA%\Garmin\ConnectIQ\Devices\fenix7s\`
+3. **Clave de desarrollador (`developer_key`):**
+   - Deposita el archivo de clave privada RSA en la raíz del repositorio con el nombre **`developer_key`** (o `developer_key.der`).
+   - *Nota de seguridad:* Este archivo está en `.gitignore` y **nunca** debe subirse al control de versiones. Si el archivo no existe, `npm test` mostrará un aviso explicativo y continuará con los tests de los otros módulos sin fallar abruptamente.
+
+---
+
+## 🛡 Quality Gate
+
+```bash
 # Ejecutar el Quality Gate determinista (Airbnb linter, Oxlint, tipos estrictos y complejidad)
 bash .specify/scripts/bash/check-quality-gate.sh
 ```
