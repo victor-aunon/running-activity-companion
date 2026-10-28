@@ -44,13 +44,25 @@ class SessionExportManager(
         val allTelemetry = telemetryDao.getAllTelemetryOrdered(actualSessionId)
         val rawCheers = cheerDao.getCheersForSession(actualSessionId).sortedBy { it.receivedAt }
 
+        val lastTelemetry = allTelemetry.lastOrNull()
+        val effectiveDistanceM = if (session.totalDistanceM > 0.0) {
+            session.totalDistanceM
+        } else {
+            lastTelemetry?.distanceM ?: 0.0
+        }
+        val effectiveElapsedSeconds = if (session.elapsedSeconds > 0) {
+            session.elapsedSeconds
+        } else {
+            ((System.currentTimeMillis() - session.startedAt) / 1000L).coerceAtLeast(0L)
+        }
+
         val timelineCheers = rawCheers.map { cheer ->
             val closestTelemetry = findClosestTelemetry(allTelemetry, cheer.receivedAt)
             val kmMark = if (closestTelemetry != null && closestTelemetry.distanceM > 0) {
                 closestTelemetry.distanceM / 1000.0
-            } else if (session.totalDistanceM > 0 && session.elapsedSeconds > 0) {
+            } else if (effectiveDistanceM > 0 && effectiveElapsedSeconds > 0) {
                 val elapsedFrac = (cheer.receivedAt - session.startedAt).coerceAtLeast(0) / 1000.0
-                (elapsedFrac * (session.totalDistanceM / session.elapsedSeconds)) / 1000.0
+                (elapsedFrac * (effectiveDistanceM / effectiveElapsedSeconds)) / 1000.0
             } else {
                 0.0
             }
@@ -74,8 +86,8 @@ class SessionExportManager(
             status = session.status,
             startedAt = session.startedAt,
             endedAt = session.endedAt,
-            totalDistanceM = session.totalDistanceM,
-            elapsedSeconds = session.elapsedSeconds,
+            totalDistanceM = effectiveDistanceM,
+            elapsedSeconds = effectiveElapsedSeconds,
             startGps = startGps,
             endGps = endGps,
             cheers = timelineCheers
@@ -117,7 +129,9 @@ class SessionExportManager(
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
                     ?: return@withContext Result.failure(IllegalStateException("Error creando archivo en MediaStore Downloads"))
 
-                resolver.openOutputStream(uri)?.use { outputStream ->
+                val stream = resolver.openOutputStream(uri)
+                    ?: return@withContext Result.failure(IllegalStateException("No se pudo abrir el stream para escritura en MediaStore"))
+                stream.use { outputStream ->
                     outputStream.write(htmlContent.toByteArray(Charsets.UTF_8))
                     outputStream.flush()
                 }
@@ -142,6 +156,7 @@ class SessionExportManager(
         return Intent(Intent.ACTION_SEND).apply {
             type = "text/html"
             putExtra(Intent.EXTRA_STREAM, fileUri)
+            clipData = android.content.ClipData.newRawUri("Running Session", fileUri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }

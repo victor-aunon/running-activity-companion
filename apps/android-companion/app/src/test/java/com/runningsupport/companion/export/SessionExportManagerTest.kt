@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -121,10 +122,47 @@ class SessionExportManagerTest {
 
         val summary = manager.buildSessionSummary(sId)
         assertNotNull(summary)
-        assertEquals("Víctor", summary?.athleteName)
-        assertEquals(1, summary?.cheers?.size)
+        val validSummary = summary!!
+        assertEquals("Víctor", validSummary.athleteName)
+        assertEquals(1, validSummary.cheers.size)
         // El km asignado al ánimo debe ser aproximadamente 5.0
-        assertEquals(5.0, summary!!.cheers[0].kmMark, 0.2)
-        assertEquals(26L, summary.cheers[0].elapsedSeconds) // 36000 - 10000 = 26000ms = 26s
+        assertEquals(5.0, validSummary.cheers[0].kmMark, 0.2)
+        assertEquals(26L, validSummary.cheers[0].elapsedSeconds) // 36000 - 10000 = 26000ms = 26s
+    }
+
+    @Test
+    fun testBuildSessionSummary_ActiveSession_CalculatesEffectiveDistanceAndElapsedFromTelemetry() = runBlocking {
+        val sId = "carrera-activa"
+        val startTime = System.currentTimeMillis() - 60000L // Hace 60 segundos
+        fakeTelemetryDao.insertSession(
+            SessionEntity(
+                sessionId = sId,
+                shareableToken = "tok",
+                spectatorPin = "4829",
+                athleteName = "Víctor",
+                status = "ACTIVE",
+                startedAt = startTime,
+                endedAt = null,
+                totalDistanceM = 0.0, // Aún no actualizado en la entidad
+                elapsedSeconds = 0L
+            )
+        )
+
+        fakeTelemetryDao.insertTelemetry(
+            TelemetryEntity(
+                sessionId = sId, seq = 1, timestamp = startTime,
+                latitude = 39.4699, longitude = -0.3763, elevation = 10.0,
+                gpsQuality = 4,
+                speedMps = 3.2, paceSecPerKm = 312.0, heartRate = 145, cadence = 175,
+                distanceM = 1500.0
+            )
+        )
+
+        val summary = manager.buildSessionSummary(sId)
+        assertNotNull(summary)
+        assertEquals("ACTIVE", summary?.status)
+        // La distancia no debe ser 0.0, debe tomar la telemetría más reciente (1500m = 1.5km)
+        assertEquals(1500.0, summary!!.totalDistanceM, 0.001)
+        assertTrue("Elapsed seconds debe ser > 0", summary.elapsedSeconds >= 50L)
     }
 }

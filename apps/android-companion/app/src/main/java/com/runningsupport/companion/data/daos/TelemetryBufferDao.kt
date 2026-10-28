@@ -64,10 +64,10 @@ interface TelemetryBufferDao {
     @Query("SELECT * FROM workout_sessions ORDER BY startedAt DESC LIMIT 1")
     suspend fun getLatestSession(): SessionEntity?
 
-    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) ORDER BY timestamp ASC LIMIT 1")
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) AND gpsQuality > 0 ORDER BY timestamp ASC LIMIT 1")
     suspend fun getFirstValidGpsPoint(sessionId: String): TelemetryEntity?
 
-    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId AND (latitude != 0.0 OR longitude != 0.0) AND gpsQuality > 0 ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastValidGpsPoint(sessionId: String): TelemetryEntity?
 
     @Query("SELECT * FROM telemetry_buffer WHERE sessionId = :sessionId ORDER BY timestamp ASC")

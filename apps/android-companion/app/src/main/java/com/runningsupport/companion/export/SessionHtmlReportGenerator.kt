@@ -33,7 +33,7 @@ object SessionHtmlReportGenerator {
         val statusBorder = if (isCompleted) "rgba(34, 197, 94, 0.3)" else "rgba(56, 189, 248, 0.3)"
 
         val startGpsText = data.startGps?.toFormattedString() ?: "No disponible"
-        val endGpsLabel = if (isCompleted) "Coordenadas de Meta" else "Última posición"
+        val endGpsLabel = if (isCompleted) "Coordenadas de Meta" else "Última posición conocida"
         val endGpsText = data.endGps?.toFormattedString() ?: "No disponible"
 
         val cheersHtml = StringBuilder()
@@ -70,7 +70,7 @@ object SessionHtmlReportGenerator {
                 """)
 
                 if (isAck) {
-                    val reply = cheer.runnerReplyText?.ifBlank { null } ?: "${escapeHtml(data.athleteName)} te lo agradece"
+                    val reply = cheer.runnerReplyText?.ifBlank { null } ?: "${data.athleteName} te lo agradece"
                     cheersHtml.append("""
                         <div class="reply-banner">
                           ❤️ ${escapeHtml(reply)} desde el reloj
