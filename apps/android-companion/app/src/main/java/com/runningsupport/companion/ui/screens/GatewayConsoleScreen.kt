@@ -1,5 +1,6 @@
 package com.runningsupport.companion.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +35,10 @@ fun GatewayConsoleScreen(
     garminDiagnostics: GarminDiagnostics = GarminDiagnostics(),
     onSendTestPing: () -> Unit = {},
     onSendTestNotification: () -> Unit = {},
+    onExportHtml: () -> Unit = {},
+    onShareExport: () -> Unit = {},
+    exportSummaryText: String? = null,
+    lastExportUri: Uri? = null,
     onSessionNameChange: (String) -> Unit,
     onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
@@ -221,6 +226,80 @@ fun GatewayConsoleScreen(
                         color = Color(0xFF64748B),
                         lineHeight = 15.sp
                     )
+                }
+            }
+
+            // Session Memory & HTML Export Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "REGISTRO Y MEMORIA DE LA SESIÓN",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Sesión: #$sessionName",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = exportSummaryText ?: "Exporta los ánimos y métricas en HTML autónomo",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onExportHtml,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1.5f)
+                        ) {
+                            Text("📥 Guardar HTML")
+                        }
+
+                        OutlinedButton(
+                            onClick = onShareExport,
+                            enabled = lastExportUri != null,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0F172A)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Compartir")
+                        }
+                    }
+
+                    if (lastExportUri != null) {
+                        Text(
+                            text = "✓ Guardado en Downloads/RunningSupport",
+                            fontSize = 11.sp,
+                            color = Color(0xFF16A34A),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 

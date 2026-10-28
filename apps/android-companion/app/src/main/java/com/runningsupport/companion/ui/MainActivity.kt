@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -14,9 +15,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.runningsupport.companion.data.AppDatabase
+import com.runningsupport.companion.export.SessionExportManager
 import com.runningsupport.companion.service.RunningActivityService
 import com.runningsupport.companion.ui.screens.GatewayConsoleScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 data class ActiveSessionState(
     val sessionId: String,
@@ -123,6 +126,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val exportManager = remember { SessionExportManager(this@MainActivity, db) }
+            val coroutineScope = rememberCoroutineScope()
+            var lastExportUri by remember { mutableStateOf<Uri?>(null) }
+
             GatewayConsoleScreen(
                 isServiceRunning = isServiceRunning,
                 isGarminConnected = isGarminConnected,
@@ -143,6 +150,26 @@ class MainActivity : ComponentActivity() {
                     val msg = RunningActivityService.sendTestCheerNotification(this@MainActivity, activeSessionId)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                 },
+                onExportHtml = {
+                    coroutineScope.launch {
+                        val targetSession = session?.sessionId?.ifEmpty { sessionName } ?: sessionName
+                        val result = exportManager.exportSessionHtml(targetSession)
+                        result.onSuccess { uri ->
+                            lastExportUri = uri
+                            Toast.makeText(this@MainActivity, "Guardado en Descargas/RunningSupport", Toast.LENGTH_LONG).show()
+                        }.onFailure { err ->
+                            Toast.makeText(this@MainActivity, "Error exportando: ${err.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                onShareExport = {
+                    lastExportUri?.let { uri ->
+                        val shareIntent = exportManager.createShareIntent(uri)
+                        startActivity(Intent.createChooser(shareIntent, "Compartir resumen de sesión"))
+                    }
+                },
+                exportSummaryText = if (lastExportUri != null) "Resumen generado y listo para compartir" else null,
+                lastExportUri = lastExportUri,
                 onSessionNameChange = { newName ->
                     val clean = newName.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "-")
                     sessionName = clean
