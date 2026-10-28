@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "node --test dist/**/*.test.js || true"
+    "pretest": "tsc",
+    "test": "node --test"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
