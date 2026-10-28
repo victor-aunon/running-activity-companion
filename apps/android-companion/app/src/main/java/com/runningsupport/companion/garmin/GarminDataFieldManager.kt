@@ -365,6 +365,7 @@ class GarminDataFieldManager(
             val paceSecPerKm = metrics?.optDouble("paceSecPerKm", 0.0) ?: 0.0
             val cadence = metrics?.optInt("cadenceSpm", 0) ?: 0
             val stepCount = metrics?.optInt("stepCount", 0) ?: 0
+            val totalDistanceM = metrics?.optDouble("totalDistanceM", 0.0) ?: 0.0
 
             _diagnosticsState.update { current ->
                 current.copy(
@@ -388,6 +389,7 @@ class GarminDataFieldManager(
                 heartRate = heartRate,
                 cadence = cadence,
                 stepCount = stepCount,
+                distanceM = totalDistanceM,
                 synced = if (sentLive) 1 else 0
             )
 

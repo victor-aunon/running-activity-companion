@@ -227,8 +227,24 @@ class RunningActivityService : Service() {
             gatewayClient?.send(completeEvent)
             try {
                 db.cheerDao().expireInFlightCheersOnSessionCompleted(sId)
+                val allTelemetry = db.telemetryBufferDao().getAllTelemetryOrdered(sId)
+                val lastTelemetry = allTelemetry.lastOrNull()
+                val finalDistance = lastTelemetry?.distanceM ?: 0.0
+                val finalElapsed = if (allTelemetry.isNotEmpty()) {
+                    val first = allTelemetry.first()
+                    (lastTelemetry!!.timestamp - first.timestamp) / 1000L
+                } else {
+                    0L
+                }
+                db.telemetryBufferDao().updateSessionSummary(
+                    sessionId = sId,
+                    status = "COMPLETED",
+                    endedAt = System.currentTimeMillis(),
+                    totalDistanceM = finalDistance,
+                    elapsedSeconds = finalElapsed
+                )
             } catch (e: Exception) {
-                Log.w(TAG, "Error expirando ánimos: ${e.message}")
+                Log.w(TAG, "Error finalizando sesión en Room: ${e.message}")
             }
             delay(300)
             gatewayClient?.disconnect()
