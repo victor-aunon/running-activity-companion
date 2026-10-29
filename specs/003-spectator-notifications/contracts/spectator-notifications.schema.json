@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://running-support.local/schemas/spectator-notifications.schema.json",
+  "title": "SpectatorNotificationEvent",
+  "description": "Schema for in-app snackbar and browser notifications displayed to spectators",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "title",
+    "message",
+    "timestamp",
+    "durationMs"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of the notification"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "MILESTONE_25",
+        "MILESTONE_50",
+        "MILESTONE_75",
+        "EXERTION",
+        "SPRINT"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Epoch timestamp in milliseconds"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 6000,
+      "description": "Display duration before auto-dismissal"
+    },
+    "cta": {
+      "type": "object",
+      "required": ["label", "action"],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "const": "SCROLL_CHEER_WALL"
+        },
+        "presetId": {
+          "type": "string",
+          "enum": ["MUCHO_ANIMO", "TU_PUEDES", "SIGUE_ASI", "CUSTOM"]
+        },
+        "customText": {
+          "type": "string",
+          "maxLength": 50
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
