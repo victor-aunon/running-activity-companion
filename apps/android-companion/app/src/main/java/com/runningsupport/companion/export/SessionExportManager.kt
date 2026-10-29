@@ -42,7 +42,10 @@ class SessionExportManager(
         val endGps = endGpsEntity?.let { GpsCoordinate(it.latitude, it.longitude) }
 
         val allTelemetry = telemetryDao.getAllTelemetryOrdered(actualSessionId)
-        val rawCheers = cheerDao.getCheersForSession(actualSessionId).sortedBy { it.receivedAt }
+        val rawCheers = cheerDao.getCheersForSession(actualSessionId)
+            .ifEmpty { cheerDao.getCheersReceivedSince(session.startedAt - 120_000L) }
+            .ifEmpty { cheerDao.getAllRecentCheers() }
+            .sortedBy { it.receivedAt }
 
         val lastTelemetry = allTelemetry.lastOrNull()
         val effectiveDistanceM = if (session.totalDistanceM > 0.0) {

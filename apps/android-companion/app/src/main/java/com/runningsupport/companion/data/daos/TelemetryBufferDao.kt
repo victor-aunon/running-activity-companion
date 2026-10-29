@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TelemetryBufferDao {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSession(session: SessionEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSession(session: SessionEntity): Long
+
+    @Query("UPDATE workout_sessions SET status = :status, startedAt = :startedAt, endedAt = null, shareableToken = :token, spectatorPin = :pin, athleteName = :athleteName WHERE sessionId = :sessionId")
+    suspend fun resetSession(sessionId: String, token: String, pin: String, athleteName: String, status: String, startedAt: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTelemetry(telemetry: TelemetryEntity): Long

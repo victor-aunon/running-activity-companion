@@ -7,16 +7,9 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "cheer_notifications",
-    foreignKeys = [
-        ForeignKey(
-            entity = SessionEntity::class,
-            parentColumns = ["sessionId"],
-            childColumns = ["sessionId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
     indices = [
-        Index(value = ["sessionId", "status"])
+        Index(value = ["sessionId", "status"]),
+        Index(value = ["receivedAt"])
     ]
 )
 data class CheerEntity(

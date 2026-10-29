@@ -75,7 +75,7 @@ class RunningActivityService : Service() {
         // Ensure SessionEntity exists in DB so foreign key constraints never fail
         serviceScope.launch {
             try {
-                db.telemetryBufferDao().insertSession(
+                val rowId = db.telemetryBufferDao().insertSession(
                     SessionEntity(
                         sessionId = sessionId,
                         shareableToken = token,
@@ -85,6 +85,16 @@ class RunningActivityService : Service() {
                         startedAt = System.currentTimeMillis()
                     )
                 )
+                if (rowId == -1L) {
+                    db.telemetryBufferDao().resetSession(
+                        sessionId = sessionId,
+                        token = token,
+                        pin = pin,
+                        athleteName = "Víctor",
+                        status = "ACTIVE",
+                        startedAt = System.currentTimeMillis()
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error inserting session entity: ${e.message}", e)
             }
@@ -174,30 +184,37 @@ class RunningActivityService : Service() {
     private fun setupCheersListener(sessionId: String) {
         serviceScope.launch {
             gatewayClient?.incomingCheers?.collect { cheerJson ->
-                val notifId = cheerJson.optString("notificationId")
-                val sender = cheerJson.optString("senderName")
-                val body = cheerJson.optString("body")
-                val preset = cheerJson.optString("presetId")
+                val notifId = cheerJson.optString("notificationId").ifEmpty { java.util.UUID.randomUUID().toString() }
+                val sender = cheerJson.optString("senderName").ifEmpty { "Espectador" }
+                val body = cheerJson.optString("body").ifEmpty { "¡Mucho ánimo!" }
+                val preset = cheerJson.optString("presetId").ifEmpty { "GENERAL" }
                 val ttl = cheerJson.optLong("ttlSeconds", 60)
+                val targetSessionId = cheerJson.optString("sessionId").ifEmpty { activeSessionId ?: sessionId }
 
                 val cheer = CheerEntity(
                     notificationId = notifId,
-                    sessionId = sessionId,
+                    sessionId = targetSessionId,
                     senderName = sender,
                     presetId = preset,
                     body = body,
                     status = "EN_RELOJ",
+                    runnerReplyText = null,
                     receivedAt = System.currentTimeMillis(),
                     expiresAt = System.currentTimeMillis() + (ttl * 1000)
                 )
 
-                db.cheerDao().insertCheer(cheer)
+                try {
+                    db.cheerDao().insertCheer(cheer)
+                    Log.i(TAG, "Ánimo guardado con éxito en Room para sesión: $targetSessionId")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error guardando ánimo en Room: ${e.message}", e)
+                }
 
                 // 1. Emitir notificación inteligente de Android (GCM la replica en el reloj sobre cualquier pantalla)
                 postCheerNotification(
                     context = this@RunningActivityService,
                     notificationId = notifId,
-                    sessionId = sessionId,
+                    sessionId = targetSessionId,
                     senderName = sender,
                     body = body,
                     ttlSeconds = ttl
@@ -208,7 +225,7 @@ class RunningActivityService : Service() {
                     val updateEvent = JSONObject().apply {
                         put("type", "CHEER_STATUS_UPDATE")
                         put("notificationId", notifId)
-                        put("sessionId", sessionId)
+                        put("sessionId", targetSessionId)
                         put("status", "EN_RELOJ")
                         put("timestamp", System.currentTimeMillis())
                     }

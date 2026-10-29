@@ -15,6 +15,12 @@ interface CheerDao {
     @Query("SELECT * FROM cheer_notifications WHERE sessionId = :sessionId ORDER BY receivedAt DESC")
     suspend fun getCheersForSession(sessionId: String): List<CheerEntity>
 
+    @Query("SELECT * FROM cheer_notifications WHERE receivedAt >= :sinceTimestamp ORDER BY receivedAt ASC")
+    suspend fun getCheersReceivedSince(sinceTimestamp: Long): List<CheerEntity>
+
+    @Query("SELECT * FROM cheer_notifications ORDER BY receivedAt DESC LIMIT 50")
+    suspend fun getAllRecentCheers(): List<CheerEntity>
+
     @Query("UPDATE cheer_notifications SET status = :status, runnerReplyText = :replyText WHERE notificationId = :notificationId")
     suspend fun updateStatus(notificationId: String, status: String, replyText: String? = null)
 

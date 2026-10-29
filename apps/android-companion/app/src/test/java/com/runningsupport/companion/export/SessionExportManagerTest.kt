@@ -24,7 +24,10 @@ class SessionExportManagerTest {
         var session: SessionEntity? = null
         val telemetries = mutableListOf<TelemetryEntity>()
 
-        override suspend fun insertSession(session: SessionEntity) { this.session = session }
+        override suspend fun insertSession(session: SessionEntity): Long {
+            this.session = session
+            return 1L
+        }
         override suspend fun insertTelemetry(telemetry: TelemetryEntity): Long {
             telemetries.add(telemetry)
             return telemetries.size.toLong()
@@ -52,6 +55,14 @@ class SessionExportManagerTest {
                 status = status, endedAt = endedAt, totalDistanceM = totalDistanceM, elapsedSeconds = elapsedSeconds
             )
         }
+        override suspend fun resetSession(
+            sessionId: String, token: String, pin: String, athleteName: String, status: String, startedAt: Long
+        ) {
+            session = session?.copy(
+                sessionId = sessionId, shareableToken = token, spectatorPin = pin,
+                athleteName = athleteName, status = status, startedAt = startedAt
+            )
+        }
     }
 
     class FakeCheerDao : CheerDao {
@@ -60,6 +71,9 @@ class SessionExportManagerTest {
         override suspend fun insertCheer(cheer: CheerEntity) { cheers.add(cheer) }
         override suspend fun updateCheer(cheer: CheerEntity) {}
         override suspend fun getCheersForSession(sessionId: String): List<CheerEntity> = cheers
+        override suspend fun getCheersReceivedSince(sinceTimestamp: Long): List<CheerEntity> =
+            cheers.filter { it.receivedAt >= sinceTimestamp }
+        override suspend fun getAllRecentCheers(): List<CheerEntity> = cheers
         override suspend fun updateStatus(notificationId: String, status: String, replyText: String?) {}
         override suspend fun expireInFlightCheersOnSessionCompleted(sessionId: String) {}
     }
