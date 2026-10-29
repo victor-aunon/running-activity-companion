@@ -17,6 +17,75 @@ export function formatPace(paceSecPerKm?: number | null): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+export interface PaceDifferenceResult {
+  text: string;
+  colorClass: string;
+  icon: string;
+  diffSeconds: number;
+}
+
+export function parseTargetPace(raw?: string | number | null): number | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw === 'number') {
+    return raw > 0 && isFinite(raw) ? Math.round(raw) : undefined;
+  }
+  const str = raw.trim();
+  if (!str) return undefined;
+
+  // Format mm:ss (e.g. "4:30", "04:30")
+  const mmSsMatch = str.match(/^(\d{1,2}):([0-5]\d)$/);
+  if (mmSsMatch) {
+    const mins = parseInt(mmSsMatch[1], 10);
+    const secs = parseInt(mmSsMatch[2], 10);
+    const total = mins * 60 + secs;
+    return total > 0 ? total : undefined;
+  }
+
+  // Format seconds number string (e.g. "270")
+  const num = Number(str);
+  if (!isNaN(num) && num > 0 && isFinite(num)) {
+    return Math.round(num);
+  }
+
+  return undefined;
+}
+
+export function formatPaceDifference(
+  currentPaceSecPerKm?: number | null,
+  targetPaceSecPerKm?: number | null,
+): PaceDifferenceResult | null {
+  if (
+    currentPaceSecPerKm === undefined ||
+    currentPaceSecPerKm === null ||
+    currentPaceSecPerKm <= 0 ||
+    !isFinite(currentPaceSecPerKm) ||
+    targetPaceSecPerKm === undefined ||
+    targetPaceSecPerKm === null ||
+    targetPaceSecPerKm <= 0 ||
+    !isFinite(targetPaceSecPerKm)
+  ) {
+    return null;
+  }
+
+  const diff = Math.round(currentPaceSecPerKm - targetPaceSecPerKm);
+  const absDiff = Math.abs(diff);
+  const mins = Math.floor(absDiff / 60);
+  const secs = absDiff % 60;
+  const sign = diff > 0 ? '+' : diff < 0 ? '-' : '';
+  const text = `${sign}${mins}:${secs.toString().padStart(2, '0')}`;
+
+  const isFaster = diff < 0;
+  const isSlower = diff > 0;
+  const colorClass = isFaster
+    ? 'text-emerald-600'
+    : isSlower
+      ? 'text-amber-600'
+      : 'text-teal-600';
+  const icon = isFaster ? '↘' : isSlower ? '↗' : '✓';
+
+  return { text, colorClass, icon, diffSeconds: diff };
+}
+
 export function formatDistanceKm(totalDistanceM?: number | null): string {
   if (
     totalDistanceM === undefined ||

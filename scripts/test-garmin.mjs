@@ -65,13 +65,15 @@ function findMonkeyc() {
 
   // B. Rutas estándar en Linux / macOS / Windows
   const candidates = [
-    path.join(os.homedir(), 'AppData', 'Roaming', 'Garmin', 'ConnectIQ', 'Sdks', 'connectiq-sdk-win-9.3.0-2026-10-20-95888f262' , 'bin', 'monkeybrains.jar'),
     path.join(os.homedir(), '.garmin', 'connectiq-sdk', 'bin', monkeycExe),
-    path.join(os.homedir(), 'Library', 'Application Support', 'Garmin', 'ConnectIQ', 'Sdks'),
+    path.join(os.homedir(), 'Library', 'Application Support', 'Garmin', 'ConnectIQ', 'Sdks', 'connectiq-sdk-mac-9.3.0-2026-10-20-95888f262', 'bin', monkeycExe),
+    path.join(os.homedir(), 'AppData', 'Roaming', 'Garmin', 'ConnectIQ', 'Sdks', 'connectiq-sdk-win-9.3.0-2026-10-20-95888f262', 'bin', monkeycExe),
   ];
 
-  if (candidates[0] && fs.existsSync(candidates[0])) {
-    return candidates[0];
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
   }
 
   return null;

@@ -101,6 +101,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            var targetPace by remember {
+                mutableStateOf(
+                    prefs.getString(KEY_TARGET_PACE, DEFAULT_TARGET_PACE) ?: DEFAULT_TARGET_PACE
+                )
+            }
+
             var session by remember {
                 mutableStateOf(sessionManager.getOrCreateSession(sessionName, spectatorPin))
             }
@@ -170,6 +176,11 @@ class MainActivity : ComponentActivity() {
                 },
                 exportSummaryText = if (lastExportUri != null) "Resumen generado y listo para compartir" else null,
                 lastExportUri = lastExportUri,
+                targetPace = targetPace,
+                onTargetPaceChange = { newPace ->
+                    targetPace = newPace
+                    prefs.edit().putString(KEY_TARGET_PACE, newPace).apply()
+                },
                 onSessionNameChange = { newName ->
                     val clean = newName.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "-")
                     sessionName = clean
@@ -187,14 +198,14 @@ class MainActivity : ComponentActivity() {
                 onToggleSimulationMode = { enabled ->
                     isSimulationMode = enabled
                     if (isServiceRunning) {
-                        startTrackingService(session, serverUrl, enabled)
+                        startTrackingService(session, serverUrl, enabled, targetPace)
                     }
                 },
                 onToggleService = { enabled ->
                     if (enabled) {
                         val activeSession = sessionManager.getOrCreateSession(sessionName, spectatorPin)
                         session = activeSession
-                        startTrackingService(activeSession, serverUrl, isSimulationMode)
+                        startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace)
                     } else {
                         RunningActivityService.onSessionCompleted()
                         stopTrackingService()
@@ -231,19 +242,36 @@ class MainActivity : ComponentActivity() {
         return trimmed
     }
 
+    private fun parseTargetPaceToSeconds(paceStr: String): Double {
+        val clean = paceStr.trim()
+        val parts = clean.split(":")
+        if (parts.size == 2) {
+            val mins = parts[0].toIntOrNull() ?: 0
+            val secs = parts[1].toIntOrNull() ?: 0
+            val total = mins * 60 + secs
+            if (total > 0) return total.toDouble()
+        }
+        val num = clean.toDoubleOrNull()
+        if (num != null && num > 0) return num
+        return 270.0
+    }
+
     private fun startTrackingService(
         session: ActiveSessionState,
         serverUrl: String,
-        isSimulation: Boolean
+        isSimulation: Boolean,
+        targetPaceStr: String
     ) {
         try {
             val resolvedUrl = sanitizeServerUrl(serverUrl)
+            val targetPaceSec = parseTargetPaceToSeconds(targetPaceStr)
             val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
                 putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
                 putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
                 putExtra(RunningActivityService.EXTRA_PIN, session.spectatorPin)
                 putExtra(RunningActivityService.EXTRA_SERVER_URL, resolvedUrl)
                 putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
+                putExtra(RunningActivityService.EXTRA_TARGET_PACE_SEC, targetPaceSec)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
@@ -269,6 +297,8 @@ class MainActivity : ComponentActivity() {
         const val KEY_SERVER_URL = "server_url"
         const val KEY_SESSION_NAME = "session_name"
         const val KEY_SPECTATOR_PIN = "spectator_pin"
+        const val KEY_TARGET_PACE = "target_pace"
+        const val DEFAULT_TARGET_PACE = "4:30"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
     }
 }

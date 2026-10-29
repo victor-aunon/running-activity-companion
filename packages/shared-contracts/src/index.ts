@@ -37,6 +37,7 @@ export interface RunningMetrics {
   stepCount?: number;
   totalDistanceM: number;
   elapsedSeconds: number;
+  targetPaceSecPerKm?: number;
 }
 
 export interface DeviceHealth {

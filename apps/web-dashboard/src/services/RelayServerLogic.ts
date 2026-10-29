@@ -8,6 +8,7 @@ interface RoomSession {
   sessionId?: string;
   spectatorPin?: string;
   athleteName?: string;
+  targetPaceSecPerKm?: number;
   lastTelemetry?: unknown;
   lastNowPlaying?: unknown;
   lastSessionState?: unknown;
@@ -53,8 +54,11 @@ function handleGatewayRegister(ws: WebSocket, room: RoomSession, msg: any) {
   room.sessionId = msg.sessionId;
   room.spectatorPin = (msg.spectatorPin || '').toString().trim();
   room.athleteName = msg.athleteName;
+  if (msg.targetPaceSecPerKm && Number(msg.targetPaceSecPerKm) > 0) {
+    room.targetPaceSecPerKm = Number(msg.targetPaceSecPerKm);
+  }
   console.log(
-    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${room.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"`,
+    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${room.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"${room.targetPaceSecPerKm ? ` | Ritmo Obj: ${room.targetPaceSecPerKm}s/km` : ''}`,
   );
   ws.send(JSON.stringify({ type: 'GATEWAY_REGISTER_ACK', status: 'READY' }));
 }
@@ -177,6 +181,9 @@ function logTelemetryStats(room: RoomSession, seq: any, metrics: any) {
 }
 
 function handleTelemetrySnapshot(room: RoomSession, msg: any) {
+  if (msg.metrics && !msg.metrics.targetPaceSecPerKm && room.targetPaceSecPerKm) {
+    msg.metrics.targetPaceSecPerKm = room.targetPaceSecPerKm;
+  }
   room.lastTelemetry = msg;
   appendPathHistory(room, msg.coordinates);
   logTelemetryStats(room, msg.seq, msg.metrics);

@@ -96,6 +96,11 @@
         "elapsedSeconds": {
           "type": "integer",
           "minimum": 0
+        },
+        "targetPaceSecPerKm": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Optional target pace in seconds per kilometer"
         }
       }
     },

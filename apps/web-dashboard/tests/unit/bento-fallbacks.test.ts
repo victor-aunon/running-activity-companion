@@ -8,9 +8,75 @@ import {
   parseCadenceZones,
   calculateDynamicEta,
   formatElevationProfile,
+  formatPaceDifference,
+  parseTargetPace,
 } from '../../src/utils/formatters.ts';
 
 void test('Bento Metric Fallbacks Unit Tests', async (t) => {
+  await t.test('formatPaceDifference converts second deltas into minutes and seconds', () => {
+    // Slower pace (walking vs running target): 540s (9:00/km) vs 270s (4:30/km) = +270s -> +4:30
+    const diff1 = formatPaceDifference(540, 270);
+    assert.ok(diff1);
+    assert.equal(diff1?.text, '+4:30');
+    assert.equal(diff1?.diffSeconds, 270);
+    assert.equal(diff1?.colorClass, 'text-amber-600');
+    assert.equal(diff1?.icon, '↗');
+
+    // Large walking delta: 730s (12:10/km) vs 270s (4:30/km) = +460s -> +7:40 (Fixes 0:460 bug!)
+    const diff460 = formatPaceDifference(730, 270);
+    assert.ok(diff460);
+    assert.equal(diff460?.text, '+7:40');
+    assert.equal(diff460?.diffSeconds, 460);
+
+    // Small positive delta: 275s (4:35/km) vs 270s (4:30/km) = +5s -> +0:05
+    const diff2 = formatPaceDifference(275, 270);
+    assert.ok(diff2);
+    assert.equal(diff2?.text, '+0:05');
+    assert.equal(diff2?.colorClass, 'text-amber-600');
+    assert.equal(diff2?.icon, '↗');
+
+    // Faster pace (negative delta): 255s (4:15/km) vs 270s (4:30/km) = -15s -> -0:15
+    const diff3 = formatPaceDifference(255, 270);
+    assert.ok(diff3);
+    assert.equal(diff3?.text, '-0:15');
+    assert.equal(diff3?.diffSeconds, -15);
+    assert.equal(diff3?.colorClass, 'text-emerald-600');
+    assert.equal(diff3?.icon, '↘');
+
+    // Significantly faster pace: 140s vs 270s = -130s -> -2:10
+    const diff4 = formatPaceDifference(140, 270);
+    assert.ok(diff4);
+    assert.equal(diff4?.text, '-2:10');
+    assert.equal(diff4?.diffSeconds, -130);
+
+    // Exactly on pace: 270s vs 270s = 0s -> 0:00
+    const diffExact = formatPaceDifference(270, 270);
+    assert.ok(diffExact);
+    assert.equal(diffExact?.text, '0:00');
+    assert.equal(diffExact?.diffSeconds, 0);
+    assert.equal(diffExact?.colorClass, 'text-teal-600');
+    assert.equal(diffExact?.icon, '✓');
+
+    // Invalid / zero pace returns null
+    assert.equal(formatPaceDifference(0, 270), null);
+    assert.equal(formatPaceDifference(270, 0), null);
+    assert.equal(formatPaceDifference(-10, 270), null);
+    assert.equal(formatPaceDifference(null, 270), null);
+    assert.equal(formatPaceDifference(270, null), null);
+  });
+
+  await t.test('parseTargetPace parses mm:ss strings and numeric seconds safely', () => {
+    assert.equal(parseTargetPace('4:30'), 270);
+    assert.equal(parseTargetPace('04:30'), 270);
+    assert.equal(parseTargetPace('5:15'), 315);
+    assert.equal(parseTargetPace('3:50'), 230);
+    assert.equal(parseTargetPace(267), 267);
+    assert.equal(parseTargetPace('267'), 267);
+    assert.equal(parseTargetPace(undefined), undefined);
+    assert.equal(parseTargetPace(''), undefined);
+    assert.equal(parseTargetPace('invalid'), undefined);
+    assert.equal(parseTargetPace('12:99'), undefined); // invalid seconds > 59
+  });
   await t.test('formatPace returns --:-- on zero, negative, or invalid pace', () => {
     assert.equal(formatPace(0), '--:--');
     assert.equal(formatPace(-10), '--:--');

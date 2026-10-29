@@ -11,6 +11,8 @@ import {
   resolveCadenceZone,
   calculateDynamicEta,
   formatElevationProfile,
+  formatPaceDifference,
+  parseTargetPace,
 } from '../../../utils/formatters';
 import { MapTile } from '../../../components/bento/MapTile';
 import { CheerWallTile } from '../../../components/bento/CheerWallTile';
@@ -41,14 +43,14 @@ function PaceMetricFooter({
     return <span className="text-slate-400 font-normal">Sin datos de ritmo</span>;
   }
   if (targetPaceSecPerKm) {
-    const diff = Math.round(metrics.paceSecPerKm - targetPaceSecPerKm);
-    const sign = diff <= 0 ? '-' : '+';
-    const absDiff = Math.abs(diff);
-    return (
-      <span className="font-bold text-teal-600">
-        ↗ {sign}0:{absDiff.toString().padStart(2, '0')}s vs objetivo
-      </span>
-    );
+    const diffResult = formatPaceDifference(metrics.paceSecPerKm, targetPaceSecPerKm);
+    if (diffResult) {
+      return (
+        <span className={`font-bold ${diffResult.colorClass}`}>
+          {diffResult.icon} {diffResult.text} vs objetivo
+        </span>
+      );
+    }
   }
   return <span className="font-bold text-teal-600">Ritmo activo</span>;
 }
@@ -419,6 +421,9 @@ function DashboardBody(props: DashboardLayoutProps) {
   const { vm, resolveZone, pathCoordinates, spectator, nowPlaying, config, elevationText, eta } =
     props;
   const cfg: Partial<FixtureConfig> = config || {};
+  const fallbackPace = parseTargetPace(process.env.NEXT_PUBLIC_TARGET_PACE) ?? 270;
+  const targetPaceSecPerKm = vm.metrics?.targetPaceSecPerKm || fallbackPace;
+
   return (
     <MainDashboardContent
       vm={vm}
@@ -427,7 +432,7 @@ function DashboardBody(props: DashboardLayoutProps) {
       spectator={spectator}
       nowPlaying={nowPlaying}
       targetDistanceKm={21.1}
-      targetPaceSecPerKm={267}
+      targetPaceSecPerKm={targetPaceSecPerKm}
       maxHeartRateBpm={174}
       routeName={cfg.routeName}
       elevationText={elevationText || cfg.elevationProfileText}

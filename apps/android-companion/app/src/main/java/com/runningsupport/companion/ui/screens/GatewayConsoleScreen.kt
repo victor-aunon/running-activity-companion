@@ -39,6 +39,8 @@ fun GatewayConsoleScreen(
     onShareExport: () -> Unit = {},
     exportSummaryText: String? = null,
     lastExportUri: Uri? = null,
+    targetPace: String = "4:30",
+    onTargetPaceChange: (String) -> Unit = {},
     onSessionNameChange: (String) -> Unit,
     onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
@@ -189,6 +191,39 @@ fun GatewayConsoleScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "💡 Los espectadores deben introducir este PIN exacto para conectar",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+            }
+
+            // Target Pace Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "RITMO OBJETIVO (MIN/KM)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = targetPace,
+                        onValueChange = onTargetPaceChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("4:30") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "💡 Ejemplo: 4:30 (se envía a los espectadores como ritmo de referencia)",
                         fontSize = 11.sp,
                         color = Color(0xFF64748B)
                     )

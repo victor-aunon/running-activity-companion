@@ -39,6 +39,7 @@ class RunningActivityService : Service() {
     private var watchdogJob: kotlinx.coroutines.Job? = null
     private var isPromptingFinish = false
     private var promptCountdownJob: kotlinx.coroutines.Job? = null
+    private var currentTargetPaceSec: Double = 270.0
 
     override fun onCreate() {
         super.onCreate()
@@ -68,6 +69,7 @@ class RunningActivityService : Service() {
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: "default-session"
         val pin = intent?.getStringExtra(EXTRA_PIN) ?: "4829"
         val isSimulation = intent?.getBooleanExtra(EXTRA_SIMULATION_MODE, false) ?: false
+        currentTargetPaceSec = intent?.getDoubleExtra(EXTRA_TARGET_PACE_SEC, 270.0) ?: 270.0
         activeSessionId = sessionId
 
         // Ensure SessionEntity exists in DB so foreign key constraints never fail
@@ -89,7 +91,7 @@ class RunningActivityService : Service() {
         }
 
         if (gatewayClient == null) {
-            val client = WebSocketGatewayClient(serverUrl, token, sessionId, pin, serviceScope)
+            val client = WebSocketGatewayClient(serverUrl, token, sessionId, pin, currentTargetPaceSec, serviceScope)
             gatewayClient = client
             client.connect()
 
@@ -135,6 +137,10 @@ class RunningActivityService : Service() {
                     if (isPromptingFinish) {
                         Log.i(TAG, "Telemetría del reloj recuperada. Cancelando aviso de fin de carrera.")
                         dismissFinishPrompt()
+                    }
+                    val metrics = snapshot.optJSONObject("metrics")
+                    if (metrics != null && !metrics.has("targetPaceSecPerKm")) {
+                        metrics.put("targetPaceSecPerKm", currentTargetPaceSec)
                     }
                     gatewayClient?.send(snapshot) ?: false
                 }
@@ -463,6 +469,7 @@ class RunningActivityService : Service() {
         const val EXTRA_SESSION_ID = "extra_session_id"
         const val EXTRA_PIN = "extra_pin"
         const val EXTRA_SIMULATION_MODE = "extra_simulation_mode"
+        const val EXTRA_TARGET_PACE_SEC = "extra_target_pace_sec"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
 

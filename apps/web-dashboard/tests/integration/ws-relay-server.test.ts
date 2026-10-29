@@ -224,4 +224,63 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     wsGateway.close();
     wsSpectator.close();
   });
+
+  await t.test('Relay attaches registered targetPaceSecPerKm to telemetry snapshots streamed to spectators', async () => {
+    const wsGateway = new WebSocket(`ws://localhost:${port}/api/ws/session?token=token-targetpace&role=gateway`);
+    await new Promise((resolve) => wsGateway.on('open', resolve));
+
+    // Register with targetPaceSecPerKm = 270 (4:30 min/km)
+    wsGateway.send(
+      JSON.stringify({
+        type: 'GATEWAY_REGISTER',
+        sessionId: 'sess-token-targetpace',
+        spectatorPin: '4829',
+        athleteName: 'Víctor',
+        targetPaceSecPerKm: 270,
+        startTime: Date.now(),
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const wsSpectator = new WebSocket(
+      `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=spectator&pin=4829`,
+    );
+    await new Promise((resolve) => wsSpectator.on('open', resolve));
+
+    const telemetryPromise = new Promise<any>((resolve) => {
+      wsSpectator.on('message', (data) => {
+        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+        const msg = JSON.parse(text);
+        if (msg.type === 'TELEMETRY_SNAPSHOT') {
+          resolve(msg);
+        }
+      });
+    });
+
+    // Gateway sends telemetry snapshot WITHOUT explicit targetPaceSecPerKm in metrics
+    wsGateway.send(
+      JSON.stringify({
+        type: 'TELEMETRY_SNAPSHOT',
+        sessionId: 'sess-token-targetpace',
+        seq: 1,
+        timestamp: Date.now(),
+        coordinates: { lat: 39.4699, lng: -0.3763, elevationM: 10, gpsQuality: 4 },
+        metrics: {
+          heartRateBpm: 150,
+          speedMps: 3.5,
+          paceSecPerKm: 285,
+          cadenceSpm: 175,
+          totalDistanceM: 100,
+          elapsedSeconds: 30,
+        },
+      }),
+    );
+
+    const receivedTelemetry = await telemetryPromise;
+    assert.equal(receivedTelemetry.metrics.targetPaceSecPerKm, 270);
+
+    wsGateway.close();
+    wsSpectator.close();
+  });
 });
