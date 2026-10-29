@@ -223,7 +223,7 @@ class RunningActivityService : Service() {
 
     fun onSessionCompleted() {
         val sId = activeSessionId ?: return
-        serviceScope.launch {
+        serviceScope.launch(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
             val completeEvent = JSONObject().apply {
                 put("type", "SESSION_STATE_CHANGED")
                 put("sessionId", sId)
@@ -552,6 +552,26 @@ class RunningActivityService : Service() {
             val testId = "test-${System.currentTimeMillis()}"
             val sender = "Prueba Companion"
             val body = "¡Mucho ánimo Víctor! Notificación inteligente de prueba"
+            val cheer = com.runningsupport.companion.data.entities.CheerEntity(
+                notificationId = testId,
+                sessionId = sessionId,
+                senderName = sender,
+                presetId = "MUCHO_ANIMO",
+                body = body,
+                status = "AGRADECIDO",
+                runnerReplyText = "Víctor te lo agradece",
+                receivedAt = System.currentTimeMillis(),
+                expiresAt = System.currentTimeMillis() + 60000L
+            )
+            activeInstance?.let { instance ->
+                instance.serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        instance.db.cheerDao().insertCheer(cheer)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error guardando ánimo de prueba en Room: ${e.message}")
+                    }
+                }
+            }
             postCheerNotification(
                 context = context,
                 notificationId = testId,
@@ -560,7 +580,7 @@ class RunningActivityService : Service() {
                 body = body,
                 ttlSeconds = 60
             )
-            return "Notificación de prueba enviada al reloj"
+            return "Notificación de prueba enviada al reloj y guardada en sesión"
         }
 
         fun sendGarminTestPing(onResult: (String) -> Unit) {

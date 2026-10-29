@@ -32,9 +32,20 @@ object SessionHtmlReportGenerator {
         val statusColor = if (isCompleted) "#4ade80" else "#38bdf8"
         val statusBorder = if (isCompleted) "rgba(34, 197, 94, 0.3)" else "rgba(56, 189, 248, 0.3)"
 
-        val startGpsText = data.startGps?.toFormattedString() ?: "No disponible"
-        val endGpsLabel = if (isCompleted) "Coordenadas de Meta" else "Última posición conocida"
-        val endGpsText = data.endGps?.toFormattedString() ?: "No disponible"
+        val startGpsHtml = if (data.startGps != null) {
+            val url = String.format(Locale.US, "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f", data.startGps.lat, data.startGps.lng)
+            """<a href="$url" target="_blank" rel="noopener noreferrer" class="gps-link">📍 Ver Salida en Google Maps ↗</a>"""
+        } else {
+            """<span class="gps-link disabled">📍 Salida: No disponible</span>"""
+        }
+
+        val endGpsLabel = if (isCompleted) "Meta" else "Última posición conocida"
+        val endGpsHtml = if (data.endGps != null) {
+            val url = String.format(Locale.US, "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f", data.endGps.lat, data.endGps.lng)
+            """<a href="$url" target="_blank" rel="noopener noreferrer" class="gps-link">🎯 Ver $endGpsLabel en Google Maps ↗</a>"""
+        } else {
+            """<span class="gps-link disabled">🎯 $endGpsLabel: No disponible</span>"""
+        }
 
         val cheersHtml = StringBuilder()
         if (data.cheers.isEmpty()) {
@@ -158,20 +169,34 @@ object SessionHtmlReportGenerator {
       letter-spacing: 0.05em;
     }
     .gps-summary {
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin: 1rem 0;
       display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      font-size: 0.8rem;
-      color: #cbd5e1;
+      gap: 0.75rem;
+      margin: 1rem 0;
       flex-wrap: wrap;
     }
-    .gps-item strong {
-      color: #f8fafc;
+    .gps-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #38bdf8;
+      text-decoration: none;
+      padding: 0.45rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .gps-link:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .gps-link.disabled {
+      color: #64748b;
+      border-color: rgba(255, 255, 255, 0.05);
+      pointer-events: none;
     }
     /* Metric Tiles */
     .metric-grid {
@@ -366,10 +391,10 @@ object SessionHtmlReportGenerator {
         <span class="status-badge">$statusLabel</span>
       </div>
 
-      <!-- Coordenadas GPS -->
+      <!-- Ubicaciones GPS con enlace a Maps -->
       <div class="gps-summary">
-        <div class="gps-item">🏁 <strong>Salida:</strong> $startGpsText</div>
-        <div class="gps-item">🎯 <strong>$endGpsLabel:</strong> $endGpsText</div>
+        $startGpsHtml
+        $endGpsHtml
       </div>
 
       <!-- Pastillas Métricas Bento -->

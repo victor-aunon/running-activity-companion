@@ -80,12 +80,23 @@ class SessionExportManager(
             )
         }
 
+        val effectiveStatus = if (session.endedAt != null || session.status == "COMPLETED") {
+            "COMPLETED"
+        } else {
+            session.status
+        }
+        val effectiveEndedAt = session.endedAt ?: if (effectiveStatus == "COMPLETED") {
+            allTelemetry.lastOrNull()?.timestamp ?: System.currentTimeMillis()
+        } else {
+            null
+        }
+
         SessionSummaryData(
             sessionId = actualSessionId,
             athleteName = session.athleteName,
-            status = session.status,
+            status = effectiveStatus,
             startedAt = session.startedAt,
-            endedAt = session.endedAt,
+            endedAt = effectiveEndedAt,
             totalDistanceM = effectiveDistanceM,
             elapsedSeconds = effectiveElapsedSeconds,
             startGps = startGps,

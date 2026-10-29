@@ -153,6 +153,26 @@ class MainActivity : ComponentActivity() {
                 },
                 onSendTestNotification = {
                     val activeSessionId = session?.sessionId ?: sessionName
+                    val testId = "test-${System.currentTimeMillis()}"
+                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            db.cheerDao().insertCheer(
+                                com.runningsupport.companion.data.entities.CheerEntity(
+                                    notificationId = testId,
+                                    sessionId = activeSessionId,
+                                    senderName = "Espectador de Prueba",
+                                    presetId = "MUCHO_ANIMO",
+                                    body = "¡Mucho ánimo Víctor! Ya estás volando hacia meta",
+                                    status = "AGRADECIDO",
+                                    runnerReplyText = "Víctor te lo agradece",
+                                    receivedAt = System.currentTimeMillis(),
+                                    expiresAt = System.currentTimeMillis() + 60000L
+                                )
+                            )
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error guardando test cheer en Room: ${e.message}")
+                        }
+                    }
                     val msg = RunningActivityService.sendTestCheerNotification(this@MainActivity, activeSessionId)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                 },
@@ -207,6 +227,30 @@ class MainActivity : ComponentActivity() {
                         session = activeSession
                         startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace)
                     } else {
+                        val sId = session?.sessionId ?: sessionName
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            try {
+                                val allTelemetry = db.telemetryBufferDao().getAllTelemetryOrdered(sId)
+                                val lastTelemetry = allTelemetry.lastOrNull()
+                                val finalDistance = lastTelemetry?.distanceM ?: 0.0
+                                val finalElapsed = if (allTelemetry.isNotEmpty()) {
+                                    val first = allTelemetry.first()
+                                    (lastTelemetry!!.timestamp - first.timestamp) / 1000L
+                                } else {
+                                    0L
+                                }
+                                db.telemetryBufferDao().updateSessionSummary(
+                                    sessionId = sId,
+                                    status = "COMPLETED",
+                                    endedAt = System.currentTimeMillis(),
+                                    totalDistanceM = finalDistance,
+                                    elapsedSeconds = finalElapsed
+                                )
+                                db.cheerDao().expireInFlightCheersOnSessionCompleted(sId)
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Error actualizando sesión al parar servicio: ${e.message}")
+                            }
+                        }
                         RunningActivityService.onSessionCompleted()
                         stopTrackingService()
                         sessionManager.markSessionCompleted()
