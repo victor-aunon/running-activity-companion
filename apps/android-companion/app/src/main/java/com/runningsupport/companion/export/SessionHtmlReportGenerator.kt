@@ -59,10 +59,18 @@ object SessionHtmlReportGenerator {
         } else {
             cheersHtml.append("""<div class="timeline">""")
             for (cheer in data.cheers) {
-                val isAck = cheer.status == "AGRADECIDO" || !cheer.runnerReplyText.isNullOrBlank()
+                val isAck = cheer.status == "AGRADECIDO"
                 val nodeColor = if (isAck) "#9333ea" else "#0284c7"
-                val statusText = if (isAck) "Agradecido" else "Enviado"
-                val statusBadgeClass = if (isAck) "badge-ack" else "badge-sent"
+                val statusText = when (cheer.status) {
+                    "AGRADECIDO" -> "Agradecido"
+                    "EXPIRADO" -> "Expirado"
+                    else -> "Enviado"
+                }
+                val statusBadgeClass = when (cheer.status) {
+                    "AGRADECIDO" -> "badge-ack"
+                    "EXPIRADO" -> "badge-expired"
+                    else -> "badge-sent"
+                }
                 val cheerTime = fullTimeFormat.format(Date(cheer.receivedAt))
 
                 cheersHtml.append("""
@@ -337,6 +345,10 @@ object SessionHtmlReportGenerator {
     .badge-ack {
       background: #f3e8ff;
       color: #7e22ce;
+    }
+    .badge-expired {
+      background: #f1f5f9;
+      color: #64748b;
     }
     .cheer-body {
       font-size: 0.9rem;

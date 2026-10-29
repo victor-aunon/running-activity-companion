@@ -163,8 +163,8 @@ class MainActivity : ComponentActivity() {
                                     senderName = "Espectador de Prueba",
                                     presetId = "MUCHO_ANIMO",
                                     body = "¡Mucho ánimo Víctor! Ya estás volando hacia meta",
-                                    status = "AGRADECIDO",
-                                    runnerReplyText = "Víctor te lo agradece",
+                                    status = "EN_RELOJ",
+                                    runnerReplyText = null,
                                     receivedAt = System.currentTimeMillis(),
                                     expiresAt = System.currentTimeMillis() + 60000L
                                 )

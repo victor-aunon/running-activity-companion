@@ -123,4 +123,36 @@ class SessionHtmlReportGeneratorTest {
         assertFalse(html.contains("<img src=x"))
         assertTrue(html.contains("&lt;img src=x"))
     }
+
+    @Test
+    fun testGenerateHtml_UnacknowledgedCheer_ShowsEnviadoWithoutReplyBanner() {
+        val summary = SessionSummaryData(
+            sessionId = "unacked-cheer",
+            athleteName = "Víctor",
+            status = "COMPLETED",
+            startedAt = 1000L,
+            endedAt = 2000L,
+            totalDistanceM = 5000.0,
+            elapsedSeconds = 1500L,
+            startGps = null,
+            endGps = null,
+            cheers = listOf(
+                TimelineCheer(
+                    senderName = "Carlos",
+                    body = "¡Fuerza!",
+                    status = "EN_RELOJ",
+                    runnerReplyText = null,
+                    receivedAt = 1500L,
+                    kmMark = 2.5,
+                    elapsedSeconds = 750L
+                )
+            )
+        )
+
+        val html = SessionHtmlReportGenerator.generateHtml(summary)
+
+        assertTrue(html.contains("Enviado"))
+        assertFalse(html.contains("Agradecido"))
+        assertFalse(html.contains("te lo agradece"))
+    }
 }

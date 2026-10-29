@@ -558,8 +558,8 @@ class RunningActivityService : Service() {
                 senderName = sender,
                 presetId = "MUCHO_ANIMO",
                 body = body,
-                status = "AGRADECIDO",
-                runnerReplyText = "Víctor te lo agradece",
+                status = "EN_RELOJ",
+                runnerReplyText = null,
                 receivedAt = System.currentTimeMillis(),
                 expiresAt = System.currentTimeMillis() + 60000L
             )
