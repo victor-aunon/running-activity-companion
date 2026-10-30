@@ -44,13 +44,11 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/shared-contracts ./packages/shared-contracts
-COPY --from=builder /app/apps/web-dashboard ./apps/web-dashboard
-
-RUN chown -R nextjs:nodejs /app
+COPY --chown=nextjs:nodejs --from=builder /app/package.json ./package.json
+COPY --chown=nextjs:nodejs --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --chown=nextjs:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=nextjs:nodejs --from=builder /app/packages/shared-contracts ./packages/shared-contracts
+COPY --chown=nextjs:nodejs --from=builder /app/apps/web-dashboard ./apps/web-dashboard
 
 USER nextjs
 EXPOSE 3000

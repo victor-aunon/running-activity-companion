@@ -19,7 +19,11 @@ export interface UseLiveTelemetryOptions {
 function resolveDefaultWsUrl(wsUrl?: string): string {
   if (wsUrl) return wsUrl;
   if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-  if (typeof window !== 'undefined' && window.location.port === '3000') {
+  if (
+    process.env.NODE_ENV === 'development' &&
+    typeof window !== 'undefined' &&
+    window.location.port === '3000'
+  ) {
     return 'ws://localhost:3001/api/ws/session';
   }
   return '/api/ws/session';
