@@ -20,8 +20,15 @@ import { SpotifyPlayerTile } from '../../../components/bento/SpotifyPlayerTile';
 import { SessionSummaryModal } from '../../../components/bento/SessionSummaryModal';
 import { useSpectatorCheer } from '../../../hooks/useSpectatorCheer';
 import { useNowPlaying } from '../../../hooks/useNowPlaying';
+import { NotificationSnackbarContainer } from '../../../components/ui/NotificationSnackbarContainer';
+import { useSpectatorNotifications } from '../../../hooks/useSpectatorNotifications';
+import { resolveTotalRaceDistance } from '../../../hooks/useSpectatorNotificationsLogic';
 import type { HeartRateZoneResult } from '../../../types/telemetry';
-import type { RunningMetrics, TelemetrySnapshotPacket } from '@running-support/shared-contracts';
+import type {
+  RunningMetrics,
+  TelemetrySnapshotPacket,
+  CheerPreset,
+} from '@running-support/shared-contracts';
 import { Heart, Gauge, Flag, Footprints, KeyRound } from 'lucide-react';
 import {
   MOCK_STITCH_FIXTURE,
@@ -131,7 +138,7 @@ function DistanceMetricFooter({
     return (
       <div className="w-full space-y-1.5">
         <div className="flex justify-between text-xs font-semibold text-slate-600">
-          <span>Progreso Media Maratón</span>
+          <span>Progreso de Carrera</span>
           <span className="text-orange-600 font-bold">{pct}%</span>
         </div>
         <div className="w-full bg-slate-100 h-2 rounded-lg overflow-hidden">
@@ -253,6 +260,7 @@ interface MainDashboardProps {
   eta?: string;
   spectatorCount?: number;
   athleteName?: string;
+  selectedPresetId?: CheerPreset | null;
 }
 
 interface MapAndCheerProps {
@@ -265,34 +273,44 @@ interface MapAndCheerProps {
   eta?: string;
   spectatorCount?: number;
   athleteName?: string;
+  selectedPresetId?: CheerPreset | null;
 }
 
-function MapAndCheerColumns({
+function MapColumn({
   vm,
   pathCoordinates,
-  spectator,
-  nowPlaying,
   routeName,
   elevationText,
   eta,
-  spectatorCount,
-  athleteName,
-}: MapAndCheerProps) {
+}: {
+  vm: ReturnType<typeof extractViewMetrics>;
+  pathCoordinates: [number, number][];
+  routeName?: string;
+  elevationText?: string;
+  eta?: string;
+}) {
+  return (
+    <div className="lg:col-span-7 xl:col-span-8 flex flex-col h-full">
+      <MapTile
+        currentLat={vm.lat}
+        currentLng={vm.lng}
+        gpsQuality={vm.gpsQuality}
+        pathCoordinates={pathCoordinates}
+        elapsedSeconds={vm.elapsedSeconds}
+        elevationM={vm.elevationM}
+        eta={eta}
+        routeName={routeName}
+        elevationProfileText={elevationText}
+      />
+    </div>
+  );
+}
+
+function MapAndCheerColumns(props: MapAndCheerProps) {
+  const { spectator, nowPlaying, spectatorCount, athleteName, selectedPresetId } = props;
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-      <div className="lg:col-span-7 xl:col-span-8 flex flex-col h-full">
-        <MapTile
-          currentLat={vm.lat}
-          currentLng={vm.lng}
-          gpsQuality={vm.gpsQuality}
-          pathCoordinates={pathCoordinates}
-          elapsedSeconds={vm.elapsedSeconds}
-          elevationM={vm.elevationM}
-          eta={eta}
-          routeName={routeName}
-          elevationProfileText={elevationText}
-        />
-      </div>
+      <MapColumn {...props} />
       <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-full gap-4">
         <SpotifyPlayerTile
           track={nowPlaying.track}
@@ -303,8 +321,7 @@ function MapAndCheerColumns({
         <CheerWallTile
           cheers={spectator.cheers}
           onSendCheer={spectator.sendCheer}
-          pin={spectator.pin}
-          onPinChange={spectator.setPin}
+          activePin={spectator.pin}
           senderName={spectator.senderName}
           onSenderNameChange={spectator.setSenderName}
           isSubmitting={spectator.isSubmitting}
@@ -312,6 +329,7 @@ function MapAndCheerColumns({
           rateLimitSeconds={spectator.rateLimitSeconds}
           spectatorCount={spectatorCount}
           athleteName={athleteName}
+          selectedPresetId={selectedPresetId}
         />
       </div>
     </div>
@@ -332,6 +350,7 @@ function MainDashboardContent({
   eta,
   spectatorCount,
   athleteName,
+  selectedPresetId,
 }: MainDashboardProps) {
   return (
     <>
@@ -354,6 +373,7 @@ function MainDashboardContent({
         eta={eta}
         spectatorCount={spectatorCount}
         athleteName={athleteName}
+        selectedPresetId={selectedPresetId}
       />
     </>
   );
@@ -384,6 +404,8 @@ interface DashboardLayoutProps {
   onDismiss: () => void;
   onRefresh?: () => void;
   displayPin?: string;
+  notifications?: ReturnType<typeof useSpectatorNotifications>;
+  selectedPresetId?: CheerPreset | null;
 }
 
 function DashboardHeader({
@@ -418,11 +440,26 @@ function DashboardHeader({
 }
 
 function DashboardBody(props: DashboardLayoutProps) {
-  const { vm, resolveZone, pathCoordinates, spectator, nowPlaying, config, elevationText, eta } =
-    props;
+  const {
+    vm,
+    resolveZone,
+    pathCoordinates,
+    spectator,
+    nowPlaying,
+    config,
+    elevationText,
+    eta,
+    selectedPresetId,
+  } = props;
   const cfg: Partial<FixtureConfig> = config || {};
   const fallbackPace = parseTargetPace(process.env.NEXT_PUBLIC_TARGET_PACE) ?? 270;
   const targetPaceSecPerKm = vm.metrics?.targetPaceSecPerKm || fallbackPace;
+
+  const totalRaceM = resolveTotalRaceDistance(
+    vm.metrics?.totalRaceDistanceM,
+    process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
+  );
+  const targetDistanceKm = totalRaceM > 0 ? Number((totalRaceM / 1000).toFixed(1)) : undefined;
 
   return (
     <MainDashboardContent
@@ -431,7 +468,7 @@ function DashboardBody(props: DashboardLayoutProps) {
       pathCoordinates={pathCoordinates}
       spectator={spectator}
       nowPlaying={nowPlaying}
-      targetDistanceKm={21.1}
+      targetDistanceKm={targetDistanceKm}
       targetPaceSecPerKm={targetPaceSecPerKm}
       maxHeartRateBpm={174}
       routeName={cfg.routeName}
@@ -439,17 +476,34 @@ function DashboardBody(props: DashboardLayoutProps) {
       eta={eta || cfg.eta}
       spectatorCount={cfg.spectatorCount}
       athleteName={cfg.athleteName}
+      selectedPresetId={selectedPresetId}
     />
   );
 }
 
 function DashboardLayout(props: DashboardLayoutProps) {
-  const { vm, isCompleted, isDismissed, onDismiss, onRefresh, displayPin, gpsLocality, config } =
-    props;
+  const {
+    vm,
+    isCompleted,
+    isDismissed,
+    onDismiss,
+    onRefresh,
+    displayPin,
+    gpsLocality,
+    config,
+    notifications,
+  } = props;
   const cfg: Partial<FixtureConfig> = config || {};
   return (
     <main className="min-h-screen bg-slate-50/70 text-slate-800 relative selection:bg-indigo-100 selection:text-indigo-900 py-6">
       <AuroraGlowOrbs />
+      {notifications && (
+        <NotificationSnackbarContainer
+          snackbars={notifications.snackbars}
+          onDismiss={notifications.dismissSnackbar}
+          onCtaClick={notifications.handleCtaClick}
+        />
+      )}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <DashboardHeader
           cfg={cfg}
@@ -508,10 +562,15 @@ function resolveInitialNowPlaying(
   return mockFixture?.nowPlaying ?? null;
 }
 
+function resolveAthleteName(mockFixture: ReturnType<typeof getInitialFixture>): string {
+  return mockFixture?.config?.athleteName || process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
+}
+
 function useDashboardSession(token: string) {
   const searchParams = useSearchParams();
   const mockFixture = getInitialFixture(searchParams);
   const init = resolveInnerDashboardParams(mockFixture, searchParams.get('pin'));
+  const athlete = resolveAthleteName(mockFixture);
 
   const telemetry = useLiveTelemetry({
     token,
@@ -521,6 +580,7 @@ function useDashboardSession(token: string) {
   });
   const { resolveZone } = useEffortZones();
   const [isDismissed, setIsDismissed] = useState(false);
+  const [selectedPresetId, setSelectedPresetId] = useState<CheerPreset | null>(null);
 
   const spectator = useSpectatorCheer({
     client: telemetry.client,
@@ -535,6 +595,11 @@ function useDashboardSession(token: string) {
   const nowPlaying = useNowPlaying({
     client: telemetry.client,
     initialNowPlaying: resolveInitialNowPlaying(searchParams, mockFixture),
+  });
+  const notifications = useSpectatorNotifications({
+    telemetry: telemetry.telemetry,
+    athleteName: athlete,
+    onSelectPreset: setSelectedPresetId,
   });
 
   return {
@@ -551,6 +616,8 @@ function useDashboardSession(token: string) {
     activePin: spectator.pin || init.initialPin || init.fallbackPin,
     client: telemetry.client,
     isUnauthorized: telemetry.isUnauthorized,
+    notifications,
+    selectedPresetId,
   };
 }
 
@@ -606,6 +673,8 @@ function SessionDashboardInner({ token }: { token: string }) {
       onDismiss={() => session.setIsDismissed(true)}
       onRefresh={onRefresh}
       displayPin={session.activePin}
+      notifications={session.notifications}
+      selectedPresetId={session.selectedPresetId}
     />
   );
 }

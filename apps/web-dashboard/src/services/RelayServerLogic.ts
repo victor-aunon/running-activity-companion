@@ -9,6 +9,7 @@ interface RoomSession {
   spectatorPin?: string;
   athleteName?: string;
   targetPaceSecPerKm?: number;
+  raceDistanceM?: number;
   lastTelemetry?: unknown;
   lastNowPlaying?: unknown;
   lastSessionState?: unknown;
@@ -57,8 +58,13 @@ function handleGatewayRegister(ws: WebSocket, room: RoomSession, msg: any) {
   if (msg.targetPaceSecPerKm && Number(msg.targetPaceSecPerKm) > 0) {
     room.targetPaceSecPerKm = Number(msg.targetPaceSecPerKm);
   }
+  if (msg.totalRaceDistanceM && Number(msg.totalRaceDistanceM) > 0) {
+    room.raceDistanceM = Number(msg.totalRaceDistanceM);
+  }
+  const paceLog = room.targetPaceSecPerKm ? ` | Ritmo Obj: ${room.targetPaceSecPerKm}s/km` : '';
+  const distLog = room.raceDistanceM ? ` | Distancia: ${room.raceDistanceM}m` : '';
   console.log(
-    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${room.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"${room.targetPaceSecPerKm ? ` | Ritmo Obj: ${room.targetPaceSecPerKm}s/km` : ''}`,
+    `🔑 [RELAY] Pasarela registrada → Sesión: "${msg.sessionId || room.token}" | PIN: ${room.spectatorPin} | Atleta: "${msg.athleteName || 'Atleta'}"${paceLog}${distLog}`,
   );
   ws.send(JSON.stringify({ type: 'GATEWAY_REGISTER_ACK', status: 'READY' }));
 }
@@ -181,8 +187,13 @@ function logTelemetryStats(room: RoomSession, seq: any, metrics: any) {
 }
 
 function handleTelemetrySnapshot(room: RoomSession, msg: any) {
-  if (msg.metrics && !msg.metrics.targetPaceSecPerKm && room.targetPaceSecPerKm) {
-    msg.metrics.targetPaceSecPerKm = room.targetPaceSecPerKm;
+  if (msg.metrics) {
+    if (!msg.metrics.targetPaceSecPerKm && room.targetPaceSecPerKm) {
+      msg.metrics.targetPaceSecPerKm = room.targetPaceSecPerKm;
+    }
+    if (!msg.metrics.totalRaceDistanceM && room.raceDistanceM) {
+      msg.metrics.totalRaceDistanceM = room.raceDistanceM;
+    }
   }
   room.lastTelemetry = msg;
   appendPathHistory(room, msg.coordinates);

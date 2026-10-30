@@ -13,12 +13,15 @@ const WS_PORT = parseInt(getArg('port', process.env.WS_PORT || process.env.PORT 
 const TOKEN = getArg('token', process.env.TOKEN || 'live-session');
 const PIN = getArg('pin', process.env.PIN || '4829');
 const ATHLETE_NAME = getArg('athlete', process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor');
+const TOTAL_RACE_DISTANCE_M = parseInt(getArg('raceDistance', '10000'), 10);
 
 const WS_URL = `ws://localhost:${WS_PORT}/api/ws/session?token=${encodeURIComponent(TOKEN)}&role=gateway`;
 
 console.log(`\n🏃 [SIMULATOR] Iniciando simulador de corredor virtual`);
 console.log(`📡 Conectando a: ${WS_URL}`);
-console.log(`🔑 Sesión: "${TOKEN}" | PIN: "${PIN}" | Atleta: "${ATHLETE_NAME}"\n`);
+console.log(
+  `🔑 Sesión: "${TOKEN}" | PIN: "${PIN}" | Atleta: "${ATHLETE_NAME}" | Distancia Carrera: ${TOTAL_RACE_DISTANCE_M}m\n`,
+);
 
 const ws = new WebSocket(WS_URL);
 
@@ -30,14 +33,20 @@ const BASE_ELEVATION = 650.0;
 let seq = 0;
 let elapsedSeconds = 0;
 let distanceM = 0;
+let distanceOffsetM = 0;
+let heartRateOverride: number | null = null;
+let cadenceOverride: number | null = null;
 let telemetryInterval: NodeJS.Timeout | null = null;
 const sessionId = '550e8400-e29b-41d4-a716-446655440000';
 
 function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number) {
   const speedMps = 3.65 + Math.sin(curSeq / 10) * 0.2;
   const paceSecPerKm = 1000 / speedMps;
-  const heartRate = Math.round(155 + Math.sin(curSeq / 8) * 12);
-  const cadence = Math.round(176 + Math.sin(curSeq / 5) * 4);
+  const baseHeartRate = Math.round(155 + Math.sin(curSeq / 8) * 12);
+  const heartRate = heartRateOverride ?? baseHeartRate;
+  const baseCadence = Math.round(176 + Math.sin(curSeq / 5) * 4);
+  const cadence = cadenceOverride ?? baseCadence;
+  const effectiveDistance = distance + distanceOffsetM;
   const angle = curSeq * 0.02;
   const lat = BASE_LAT + Math.sin(angle) * 0.005;
   const lng = BASE_LNG + Math.cos(angle) * 0.005;
@@ -58,7 +67,8 @@ function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number)
         paceSecPerKm: Number(paceSecPerKm.toFixed(1)),
         cadenceSpm: cadence,
         stepCount: curSeq * 3,
-        totalDistanceM: Number(distance.toFixed(1)),
+        totalDistanceM: Number(effectiveDistance.toFixed(1)),
+        totalRaceDistanceM: TOTAL_RACE_DISTANCE_M,
         elapsedSeconds: elapsed,
       },
       deviceHealth: {
@@ -119,15 +129,18 @@ ws.on('open', () => {
       sessionId,
       spectatorPin: PIN,
       athleteName: ATHLETE_NAME,
+      totalRaceDistanceM: TOTAL_RACE_DISTANCE_M,
       startTime: Date.now(),
     }),
   );
   console.log('✓ Sesión registrada exitosamente.');
   console.log('🚀 Emitiendo telemetría en vivo a 1 Hz (Pulsa Ctrl+C para detener)...');
-  console.log('💬 Pulsa [r] en este terminal para enviar el agradecimiento del corredor.');
-  console.log(
-    '🏁 Pulsa [f] en este terminal para finalizar la actividad y mostrar el resumen en la web.\n',
-  );
+  console.log('⌨️  Controles interactivos en tiempo real:');
+  console.log('   [k] Sumar +1 km a la distancia recorrida');
+  console.log('   [h] Alternar override de pulso alto (190 bpm)');
+  console.log('   [c] Alternar override de cadencia alta (210 spm)');
+  console.log('   [r] Enviar agradecimiento del corredor al último ánimo recibido');
+  console.log('   [f] Finalizar actividad (COMPLETED)\n');
   startTelemetryInterval(ws);
 });
 
@@ -158,6 +171,34 @@ if (process.stdin.isTTY) {
       process.exit();
     }
     const char = key.toString().toLowerCase();
+    if (char === 'k') {
+      distanceOffsetM += 1000;
+      console.log(
+        `⚡️ [ACCELERATION] +1 km añadido. Distancia simulada: ${((distanceM + distanceOffsetM) / 1000).toFixed(2)} km`,
+      );
+    }
+    if (char === 'h') {
+      if (heartRateOverride === 190) {
+        heartRateOverride = null;
+        console.log(`❤️ [PULSO] Override desactivado (volviendo a pulso natural ~155-167 bpm).`);
+      } else {
+        heartRateOverride = 190;
+        console.log(`🔥 [PULSO] Override activado a 190 bpm (provocará alerta EXERTION en web).`);
+      }
+    }
+    if (char === 'c') {
+      if (cadenceOverride === 210) {
+        cadenceOverride = null;
+        console.log(
+          `👟 [CADENCIA] Override desactivado (volviendo a cadencia natural ~176-180 spm).`,
+        );
+      } else {
+        cadenceOverride = 210;
+        console.log(
+          `⚡️ [CADENCIA] Override activado a 210 spm (con pulso alto provocará alerta SPRINT).`,
+        );
+      }
+    }
     if (char === 'r') {
       if (lastReceivedNotificationId) {
         sendGratitudeReply(lastReceivedNotificationId, ws);

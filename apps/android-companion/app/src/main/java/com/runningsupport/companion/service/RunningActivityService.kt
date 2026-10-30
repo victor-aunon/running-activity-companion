@@ -40,6 +40,7 @@ class RunningActivityService : Service() {
     private var isPromptingFinish = false
     private var promptCountdownJob: kotlinx.coroutines.Job? = null
     private var currentTargetPaceSec: Double = 270.0
+    private var currentTotalRaceDistanceM: Double = 10000.0
 
     override fun onCreate() {
         super.onCreate()
@@ -70,6 +71,7 @@ class RunningActivityService : Service() {
         val pin = intent?.getStringExtra(EXTRA_PIN) ?: "4829"
         val isSimulation = intent?.getBooleanExtra(EXTRA_SIMULATION_MODE, false) ?: false
         currentTargetPaceSec = intent?.getDoubleExtra(EXTRA_TARGET_PACE_SEC, 270.0) ?: 270.0
+        currentTotalRaceDistanceM = intent?.getDoubleExtra(EXTRA_TOTAL_RACE_DISTANCE_M, 10000.0) ?: 10000.0
         activeSessionId = sessionId
 
         // Ensure SessionEntity exists in DB so foreign key constraints never fail
@@ -101,7 +103,15 @@ class RunningActivityService : Service() {
         }
 
         if (gatewayClient == null) {
-            val client = WebSocketGatewayClient(serverUrl, token, sessionId, pin, currentTargetPaceSec, serviceScope)
+            val client = WebSocketGatewayClient(
+                serverUrl,
+                token,
+                sessionId,
+                pin,
+                currentTargetPaceSec,
+                currentTotalRaceDistanceM,
+                serviceScope
+            )
             gatewayClient = client
             client.connect()
 
@@ -149,8 +159,13 @@ class RunningActivityService : Service() {
                         dismissFinishPrompt()
                     }
                     val metrics = snapshot.optJSONObject("metrics")
-                    if (metrics != null && !metrics.has("targetPaceSecPerKm")) {
-                        metrics.put("targetPaceSecPerKm", currentTargetPaceSec)
+                    if (metrics != null) {
+                        if (!metrics.has("targetPaceSecPerKm")) {
+                            metrics.put("targetPaceSecPerKm", currentTargetPaceSec)
+                        }
+                        if (!metrics.has("totalRaceDistanceM")) {
+                            metrics.put("totalRaceDistanceM", currentTotalRaceDistanceM)
+                        }
                     }
                     gatewayClient?.send(snapshot) ?: false
                 }
@@ -487,6 +502,7 @@ class RunningActivityService : Service() {
         const val EXTRA_PIN = "extra_pin"
         const val EXTRA_SIMULATION_MODE = "extra_simulation_mode"
         const val EXTRA_TARGET_PACE_SEC = "extra_target_pace_sec"
+        const val EXTRA_TOTAL_RACE_DISTANCE_M = "extra_total_race_distance_m"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
 

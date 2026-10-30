@@ -101,6 +101,11 @@
           "type": "number",
           "minimum": 0.0,
           "description": "Optional target pace in seconds per kilometer"
+        },
+        "totalRaceDistanceM": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "description": "Optional planned total race distance in meters (e.g. 10000 for 10k)"
         }
       }
     },

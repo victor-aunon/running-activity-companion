@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import type { CheerItem } from '../../types/cheer';
 import type { CheerPreset } from '@running-support/shared-contracts';
 import { Megaphone, Send, ShieldAlert, HeartHandshake } from 'lucide-react';
+import { formatShortTime, resolveCheerStatusConfig } from './CheerWallLogic';
 
 export interface CheerWallTileProps {
   cheers: CheerItem[];
   onSendCheer: (preset: CheerPreset, body: string) => Promise<void>;
-  pin: string;
-  onPinChange: (pin: string) => void;
+  pin?: string;
+  activePin?: string;
+  onPinChange?: (pin: string) => void;
   senderName: string;
   onSenderNameChange: (name: string) => void;
   isSubmitting?: boolean;
@@ -17,45 +19,8 @@ export interface CheerWallTileProps {
   rateLimitSeconds?: number;
   spectatorCount?: number;
   athleteName?: string;
-}
-
-function formatShortTime(timestamp?: number): string {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-}
-
-interface CheerStatusConfig {
-  label: string;
-  className: string;
-}
-
-function resolveCheerStatusConfig(status: CheerItem['status']): CheerStatusConfig {
-  switch (status) {
-    case 'EN_RELOJ':
-    case 'ENVIADO':
-      return {
-        label: 'Enviado',
-        className: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
-      };
-    case 'AGRADECIDO':
-      return {
-        label: 'Agradecido',
-        className: 'bg-purple-50 text-purple-700 border-purple-200/80',
-      };
-    case 'EXPIRADO':
-      return {
-        label: 'Expirado',
-        className: 'bg-slate-100 text-slate-500 border-slate-200/80',
-      };
-    default:
-      return {
-        label: 'Enviado',
-        className: 'bg-slate-50 text-slate-600 border-slate-200/80',
-      };
-  }
+  selectedPresetId?: CheerPreset | null;
+  onPresetSelected?: (preset: CheerPreset | null) => void;
 }
 
 function CheerItemCard({ cheer }: { cheer: CheerItem }) {
@@ -120,18 +85,21 @@ function CheerFeed({ displayCheers }: { displayCheers: CheerItem[] }) {
 
 function PresetButtons({
   disabled,
+  selectedPresetId,
   onSend,
 }: {
   disabled: boolean;
+  selectedPresetId?: CheerPreset | null;
   onSend: (p: CheerPreset, t: string) => void;
 }) {
+  const isSelected = (p: CheerPreset) => selectedPresetId === p;
   return (
     <div className="grid grid-cols-3 gap-2 my-3">
       <button
         type="button"
         disabled={disabled}
         onClick={() => onSend('MUCHO_ANIMO', '¡Mucho ánimo!')}
-        className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-indigo-50 to-indigo-100/60 text-indigo-700 font-bold text-xs border border-indigo-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+        className={`py-2.5 px-2 rounded-xl bg-gradient-to-b from-indigo-50 to-indigo-100/60 text-indigo-700 font-bold text-xs border border-indigo-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 ${isSelected('MUCHO_ANIMO') ? 'ring-2 ring-indigo-500 shadow-md' : ''}`}
       >
         <span className="text-base">🔥</span>
         <span className="leading-none text-center">¡Mucho ánimo!</span>
@@ -140,7 +108,7 @@ function PresetButtons({
         type="button"
         disabled={disabled}
         onClick={() => onSend('TU_PUEDES', '¡Tú puedes!')}
-        className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-teal-50 to-teal-100/60 text-teal-700 font-bold text-xs border border-teal-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+        className={`py-2.5 px-2 rounded-xl bg-gradient-to-b from-teal-50 to-teal-100/60 text-teal-700 font-bold text-xs border border-teal-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 ${isSelected('TU_PUEDES') ? 'ring-2 ring-teal-500 shadow-md' : ''}`}
       >
         <span className="text-base">⚡️</span>
         <span className="leading-none text-center">¡Tú puedes!</span>
@@ -149,7 +117,7 @@ function PresetButtons({
         type="button"
         disabled={disabled}
         onClick={() => onSend('SIGUE_ASI', '¡Sigue así!')}
-        className="py-2.5 px-2 rounded-xl bg-gradient-to-b from-rose-50 to-rose-100/60 text-rose-700 font-bold text-xs border border-rose-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+        className={`py-2.5 px-2 rounded-xl bg-gradient-to-b from-rose-50 to-rose-100/60 text-rose-700 font-bold text-xs border border-rose-200/70 shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-1 disabled:opacity-50 ${isSelected('SIGUE_ASI') ? 'ring-2 ring-rose-500 shadow-md' : ''}`}
       >
         <span className="text-base">🏃</span>
         <span className="leading-none text-center">¡Sigue así!</span>
@@ -230,37 +198,24 @@ interface CheerActionSectionProps {
   errorMsg: string | null;
   senderName: string;
   onSenderNameChange: (name: string) => void;
-  pin: string;
-  onPinChange: (pin: string) => void;
+  selectedPresetId?: CheerPreset | null;
 }
 
 function SpectatorCredentialsInput({
   senderName,
   onSenderNameChange,
-  pin,
-  onPinChange,
 }: {
   senderName: string;
   onSenderNameChange: (name: string) => void;
-  pin: string;
-  onPinChange: (pin: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 mb-2">
+    <div className="mb-2">
       <input
         type="text"
         placeholder="Tu nombre (ej. Laura)..."
         value={senderName}
         onChange={(e) => onSenderNameChange(e.target.value)}
         className="w-full px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
-      />
-      <input
-        type="password"
-        maxLength={4}
-        placeholder="PIN (4 dígitos)..."
-        value={pin}
-        onChange={(e) => onPinChange(e.target.value)}
-        className="w-full px-3 py-1.5 text-xs font-mono tracking-wider bg-slate-100 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
       />
     </div>
   );
@@ -273,21 +228,19 @@ function CheerActionSection({
   errorMsg,
   senderName,
   onSenderNameChange,
-  pin,
-  onPinChange,
+  selectedPresetId,
 }: CheerActionSectionProps) {
   return (
     <div>
       <p className="text-xs font-semibold text-slate-600 mb-1">
         Envía un ánimo rápido al reloj de {athlete}:
       </p>
-      <SpectatorCredentialsInput
-        senderName={senderName}
-        onSenderNameChange={onSenderNameChange}
-        pin={pin}
-        onPinChange={onPinChange}
+      <SpectatorCredentialsInput senderName={senderName} onSenderNameChange={onSenderNameChange} />
+      <PresetButtons
+        disabled={isDisabled}
+        selectedPresetId={selectedPresetId}
+        onSend={(p, t) => void onSendCheer(p, t)}
       />
-      <PresetButtons disabled={isDisabled} onSend={(p, t) => void onSendCheer(p, t)} />
       <CustomCheerForm disabled={isDisabled} onSend={(t) => void onSendCheer('CUSTOM', t)} />
       {errorMsg && (
         <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs my-2">
@@ -302,8 +255,6 @@ function CheerActionSection({
 export function CheerWallTile({
   cheers,
   onSendCheer,
-  pin,
-  onPinChange,
   senderName,
   onSenderNameChange,
   isSubmitting = false,
@@ -311,13 +262,17 @@ export function CheerWallTile({
   rateLimitSeconds = 0,
   spectatorCount,
   athleteName,
+  selectedPresetId,
 }: CheerWallTileProps) {
   const isLocked = rateLimitSeconds > 0;
   const isDisabled = isSubmitting || isLocked;
   const athlete = athleteName || process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
 
   return (
-    <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col h-full min-h-[560px] justify-between">
+    <div
+      id="cheer-wall"
+      className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col h-full min-h-[560px] justify-between scroll-mt-6"
+    >
       <div>
         <CheerWallHeader spectatorCount={spectatorCount} />
         <CheerActionSection
@@ -327,8 +282,7 @@ export function CheerWallTile({
           errorMsg={errorMsg}
           senderName={senderName}
           onSenderNameChange={onSenderNameChange}
-          pin={pin}
-          onPinChange={onPinChange}
+          selectedPresetId={selectedPresetId}
         />
       </div>
       <CheerFeed displayCheers={cheers} />

@@ -17,6 +17,7 @@ class WebSocketGatewayClient(
     private val sessionId: String,
     private val spectatorPin: String,
     private val targetPaceSecPerKm: Double = 270.0,
+    private val totalRaceDistanceM: Double = 10000.0,
     private val scope: CoroutineScope
 ) {
     private val client = OkHttpClient.Builder()
@@ -52,6 +53,7 @@ class WebSocketGatewayClient(
                         put("spectatorPin", spectatorPin)
                         put("athleteName", "Víctor")
                         put("targetPaceSecPerKm", targetPaceSecPerKm)
+                        put("totalRaceDistanceM", totalRaceDistanceM)
                     }
                     ws.send(registerMsg.toString())
                 }

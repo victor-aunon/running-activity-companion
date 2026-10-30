@@ -17,10 +17,10 @@
 
 **Purpose**: Definición de esquemas de contrato formal y tipos compartidos para notificaciones de espectador y distancia de carrera.
 
-- [ ] T001 Define JSON Schema Draft-2020-12 for `SpectatorNotificationEvent` in `packages/shared-contracts/spectator-notifications.schema.json`
-- [ ] T002 [P] Extend telemetry metrics schema to include optional `totalRaceDistanceM` (number, positive) in `packages/shared-contracts/telemetry.schema.json`
-- [ ] T003 [P] Export domain models (`SpectatorNotification`, `NotificationType`, `NotificationCta`) and extend `RunningMetrics` with `totalRaceDistanceM?: number` in `packages/shared-contracts/src/index.ts`
-- [ ] T004 Build shared contracts package and verify bundle output in `packages/shared-contracts/package.json`
+- [X] T001 Define JSON Schema Draft-2020-12 for `SpectatorNotificationEvent` in `packages/shared-contracts/spectator-notifications.schema.json`
+- [X] T002 [P] Extend telemetry metrics schema to include optional `totalRaceDistanceM` (number, positive) in `packages/shared-contracts/telemetry.schema.json`
+- [X] T003 [P] Export domain models (`SpectatorNotification`, `NotificationType`, `NotificationCta`) and extend `RunningMetrics` with `totalRaceDistanceM?: number` in `packages/shared-contracts/src/index.ts`
+- [X] T004 Build shared contracts package and verify bundle output in `packages/shared-contracts/package.json`
 
 ---
 
@@ -30,9 +30,9 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 [P] Create Ajv contract tests in `apps/web-dashboard/tests/contract/spectator-notifications-contract.test.ts` validating `SpectatorNotificationEvent` fixtures against schema
-- [ ] T006 Implement `room.raceDistanceM` storage in `GATEWAY_REGISTER` and automatic attachment to downstream telemetry snapshots in `apps/web-dashboard/src/services/RelayServerLogic.ts`
-- [ ] T007 [P] Add mock fixture data for spectator notifications, race distance, and exertion states in `apps/web-dashboard/src/fixtures/stitchVisualMock.ts`
+- [X] T005 [P] Create Ajv contract tests in `apps/web-dashboard/tests/contract/spectator-notifications-contract.test.ts` validating `SpectatorNotificationEvent` fixtures against schema
+- [X] T006 Implement `room.raceDistanceM` storage in `GATEWAY_REGISTER` and automatic attachment to downstream telemetry snapshots in `apps/web-dashboard/src/services/RelayServerLogic.ts`
+- [X] T007 [P] Add mock fixture data for spectator notifications, race distance, and exertion states in `apps/web-dashboard/src/fixtures/stitchVisualMock.ts`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
@@ -46,12 +46,12 @@
 
 ### Tests for User Story 1 (TDD Mandatory) ⚠️
 
-- [ ] T008 [P] [US1] Create component unit tests in `apps/web-dashboard/tests/unit/CheerWallTile.test.ts` verifying PIN input field is completely omitted and `activePin` is used automatically on dispatch
+- [X] T008 [P] [US1] Create component unit tests in `apps/web-dashboard/tests/unit/CheerWallTile.test.ts` verifying PIN input field is completely omitted and `activePin` is used automatically on dispatch
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Remove PIN input field from `SpectatorCredentialsInput` in `apps/web-dashboard/src/components/bento/CheerWallTile.tsx` and adjust `senderName` input to full width
-- [ ] T010 [US1] Wire `CheerWallTile` with `activePin` derived from session state in `apps/web-dashboard/src/app/session/[token]/page.tsx`
+- [X] T009 [US1] Remove PIN input field from `SpectatorCredentialsInput` in `apps/web-dashboard/src/components/bento/CheerWallTile.tsx` and adjust `senderName` input to full width
+- [X] T010 [US1] Wire `CheerWallTile` with `activePin` derived from session state in `apps/web-dashboard/src/app/session/[token]/page.tsx`
 
 **Checkpoint**: User Story 1 is fully functional and testable as an MVP increment.
 
@@ -65,17 +65,17 @@
 
 ### Tests for User Story 2 (TDD Mandatory) ⚠️
 
-- [ ] T011 [P] [US2] Create unit tests for landing access form in `apps/web-dashboard/tests/unit/access-page.test.ts` verifying `Notification.requestPermission()` invocation prior to router navigation
-- [ ] T012 [P] [US2] Create unit tests in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating distance milestone triggers (25%, 50%, 75%) against effective distance formula
+- [X] T011 [P] [US2] Create unit tests for landing access form in `apps/web-dashboard/tests/unit/access-page.test.ts` verifying `Notification.requestPermission()` invocation prior to router navigation
+- [X] T012 [P] [US2] Create unit tests in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating distance milestone triggers (25%, 50%, 75%) against effective distance formula
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Implement upfront `Notification.requestPermission()` invocation upon form submission in `apps/web-dashboard/src/app/page.tsx` before `router.push`
-- [ ] T014 [P] [US2] Implement `NotificationSnackbarContainer` component with Aurora Bento styling, auto-dismiss (6000ms), and close button in `apps/web-dashboard/src/components/ui/NotificationSnackbarContainer.tsx`
-- [ ] T015 [US2] Implement distance milestone tracking and dual dispatch (snackbar queue + `new Notification()`) with web env fallback (`NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M`) in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
-- [ ] T016 [US2] Integrate `NotificationSnackbarContainer` and `useSpectatorNotifications` in `apps/web-dashboard/src/app/session/[token]/page.tsx`
-- [ ] T017 [P] [US2] Add `targetDistanceKm` input field (default `"10.0"`) in `apps/android-companion/app/src/main/java/com/runningsupport/companion/ui/screens/GatewayConsoleScreen.kt`
-- [ ] T018 [US2] Transmit `totalRaceDistanceM` in `GATEWAY_REGISTER` and telemetry metrics in `apps/android-companion/app/src/main/java/com/runningsupport/companion/network/WebSocketGatewayClient.kt` and `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/RunningActivityService.kt`
+- [X] T013 [US2] Implement upfront `Notification.requestPermission()` invocation upon form submission in `apps/web-dashboard/src/app/page.tsx` before `router.push`
+- [X] T014 [P] [US2] Implement `NotificationSnackbarContainer` component with Aurora Bento styling, auto-dismiss (6000ms), and close button in `apps/web-dashboard/src/components/ui/NotificationSnackbarContainer.tsx`
+- [X] T015 [US2] Implement distance milestone tracking and dual dispatch (snackbar queue + `new Notification()`) with web env fallback (`NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M`) in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
+- [X] T016 [US2] Integrate `NotificationSnackbarContainer` and `useSpectatorNotifications` in `apps/web-dashboard/src/app/session/[token]/page.tsx`
+- [X] T017 [P] [US2] Add `targetDistanceKm` input field (default `"10.0"`) in `apps/android-companion/app/src/main/java/com/runningsupport/companion/ui/screens/GatewayConsoleScreen.kt`
+- [X] T018 [US2] Transmit `totalRaceDistanceM` in `GATEWAY_REGISTER` and telemetry metrics in `apps/android-companion/app/src/main/java/com/runningsupport/companion/network/WebSocketGatewayClient.kt` and `apps/android-companion/app/src/main/java/com/runningsupport/companion/service/RunningActivityService.kt`
 
 **Checkpoint**: User Stories 1 AND 2 work independently.
 
@@ -89,14 +89,14 @@
 
 ### Tests for User Story 3 (TDD Mandatory) ⚠️
 
-- [ ] T019 [P] [US3] Create unit tests for exertion and sprint state machines in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating 30s cooldown, 3-consecutive cap, reset on BPM normalization, and `<2000m` single sprint trigger
-- [ ] T020 [P] [US3] Create component unit tests in `apps/web-dashboard/tests/unit/NotificationSnackbarContainer.test.ts` verifying sprint CTA button click dispatches smooth scroll and preselects sprint preset
+- [X] T019 [P] [US3] Create unit tests for exertion and sprint state machines in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating 30s cooldown, 3-consecutive cap, reset on BPM normalization, and `<2000m` single sprint trigger
+- [X] T020 [P] [US3] Create component unit tests in `apps/web-dashboard/tests/unit/NotificationSnackbarContainer.test.ts` verifying sprint CTA button click dispatches smooth scroll and preselects sprint preset
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Implement exertion monitoring state machine (cooldown 30s, max 3 consecutive alerts, counter reset when HR < threshold) in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
-- [ ] T022 [US3] Implement sprint alert state machine (BPM > 175, cadencia > 180 spm, single alert if remaining < 2000m, standard cooldown otherwise) with CTA payload in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
-- [ ] T023 [US3] Connect sprint CTA action to smooth scroll to `#cheer-wall` and preselect sprint preset in `apps/web-dashboard/src/components/bento/CheerWallTile.tsx` and `apps/web-dashboard/src/app/session/[token]/page.tsx`
+- [X] T021 [US3] Implement exertion monitoring state machine (cooldown 30s, max 3 consecutive alerts, counter reset when HR < threshold) in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
+- [X] T022 [US3] Implement sprint alert state machine (BPM > 175, cadencia > 180 spm, single alert if remaining < 2000m, standard cooldown otherwise) with CTA payload in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts`
+- [X] T023 [US3] Connect sprint CTA action to smooth scroll to `#cheer-wall` and preselect sprint preset in `apps/web-dashboard/src/components/bento/CheerWallTile.tsx` and `apps/web-dashboard/src/app/session/[token]/page.tsx`
 
 **Checkpoint**: User Stories 1, 2, and 3 are complete and integrated.
 
@@ -110,11 +110,11 @@
 
 ### Tests for User Story 4 (TDD Mandatory) ⚠️
 
-- [ ] T024 [P] [US4] Create unit tests in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating late joiner suppression on initial telemetry snapshot and immediate evaluation of active exertion/sprint
+- [X] T024 [P] [US4] Create unit tests in `apps/web-dashboard/tests/unit/useSpectatorNotifications.test.ts` validating late joiner suppression on initial telemetry snapshot and immediate evaluation of active exertion/sprint
 
 ### Implementation for User Story 4
 
-- [ ] T025 [US4] Implement initial distance snapshot evaluation in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts` marking prior milestones as already reported without triggering snackbars or browser notifications
+- [X] T025 [US4] Implement initial distance snapshot evaluation in `apps/web-dashboard/src/hooks/useSpectatorNotifications.ts` marking prior milestones as already reported without triggering snackbars or browser notifications
 
 **Checkpoint**: User Stories 1 through 4 work seamlessly together.
 
@@ -128,8 +128,8 @@
 
 ### Implementation for User Story 5
 
-- [ ] T026 [P] [US5] Implement raw mode TTY key handlers for `[k]` (+1 km distance offset), `[h]` (toggle 190 bpm override), and `[c]` (toggle 210 spm override) with console logging in `apps/web-dashboard/scripts/simulate-runner.ts`
-- [ ] T027 [US5] Update `buildTelemetryPacket` in `apps/web-dashboard/scripts/simulate-runner.ts` to apply active distance offset and overrides for heart rate and cadence
+- [X] T026 [P] [US5] Implement raw mode TTY key handlers for `[k]` (+1 km distance offset), `[h]` (toggle 190 bpm override), and `[c]` (toggle 210 spm override) with console logging in `apps/web-dashboard/scripts/simulate-runner.ts`
+- [X] T027 [US5] Update `buildTelemetryPacket` in `apps/web-dashboard/scripts/simulate-runner.ts` to apply active distance offset and overrides for heart rate and cadence
 
 **Checkpoint**: All five user stories are complete and validated.
 
@@ -139,9 +139,9 @@
 
 **Purpose**: Verificación de extremo a extremo, pruebas de no regresión y cumplimiento de guías de calidad.
 
-- [ ] T028 [P] Update contract documentation and references in `specs/003-spectator-notifications/contracts/notifications-protocol.md`
-- [ ] T029 Execute full test suite verifying contract, unit, and integration tests with `pnpm test`
-- [ ] T030 Validate all manual validation scenarios per `specs/003-spectator-notifications/quickstart.md`
+- [X] T028 [P] Update contract documentation and references in `specs/003-spectator-notifications/contracts/notifications-protocol.md`
+- [X] T029 Execute full test suite verifying contract, unit, and integration tests with `pnpm test`
+- [X] T030 Validate all manual validation scenarios per `specs/003-spectator-notifications/quickstart.md`
 
 ---
 

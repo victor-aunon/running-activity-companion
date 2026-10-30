@@ -38,7 +38,34 @@ export interface RunningMetrics {
   totalDistanceM: number;
   elapsedSeconds: number;
   targetPaceSecPerKm?: number;
+  totalRaceDistanceM?: number;
 }
+
+export type NotificationType =
+  | 'MILESTONE_25'
+  | 'MILESTONE_50'
+  | 'MILESTONE_75'
+  | 'EXERTION'
+  | 'SPRINT';
+
+export interface NotificationCta {
+  label: string;
+  action: 'SCROLL_CHEER_WALL';
+  presetId?: CheerPreset;
+  customText?: string;
+}
+
+export interface SpectatorNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: number;
+  durationMs: number;
+  cta?: NotificationCta | null;
+}
+
+export type SpectatorNotificationEvent = SpectatorNotification;
 
 export interface DeviceHealth {
   watchBatteryPct?: number;
@@ -69,6 +96,8 @@ export interface GatewayRegisterMessage {
   spectatorPin: string;
   athleteName: string;
   startTime: number;
+  targetPaceSecPerKm?: number;
+  totalRaceDistanceM?: number;
 }
 
 export interface GatewayRegisterAck {
@@ -252,4 +281,37 @@ export function isNowPlayingUpdatePacket(msg: unknown): msg is NowPlayingUpdateP
   }
   return true;
 }
+
+export function isSpectatorNotification(msg: unknown): msg is SpectatorNotification {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Record<string, unknown>;
+  const validTypes = ['MILESTONE_25', 'MILESTONE_50', 'MILESTONE_75', 'EXERTION', 'SPRINT'];
+  if (
+    typeof m.id !== 'string' ||
+    typeof m.type !== 'string' ||
+    !validTypes.includes(m.type) ||
+    typeof m.title !== 'string' ||
+    typeof m.message !== 'string' ||
+    typeof m.timestamp !== 'number' ||
+    typeof m.durationMs !== 'number'
+  ) {
+    return false;
+  }
+  if (m.cta !== undefined && m.cta !== null) {
+    if (typeof m.cta !== 'object') return false;
+    const cta = m.cta as Record<string, unknown>;
+    if (typeof cta.label !== 'string' || cta.action !== 'SCROLL_CHEER_WALL') {
+      return false;
+    }
+    if (cta.presetId !== undefined && cta.presetId !== null) {
+      if (!['MUCHO_ANIMO', 'TU_PUEDES', 'SIGUE_ASI', 'CUSTOM'].includes(cta.presetId as string)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+export const isSpectatorNotificationEvent = isSpectatorNotification;
+
 

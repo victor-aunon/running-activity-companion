@@ -4,6 +4,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'En Vivo | Running Activity Support',
   description: 'Seguimiento en tiempo real y muro de ánimos para carreras',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

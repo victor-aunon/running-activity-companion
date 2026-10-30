@@ -51,6 +51,18 @@ async function sendFailedCheer(ws: WebSocket, notifId: string): Promise<{ code: 
   return errPromise;
 }
 
+function waitForTelemetrySnapshot(ws: WebSocket): Promise<any> {
+  return new Promise((resolve) => {
+    ws.on('message', (data) => {
+      const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+      const msg = JSON.parse(text);
+      if (msg.type === 'TELEMETRY_SNAPSHOT') {
+        resolve(msg);
+      }
+    });
+  });
+}
+
 void test('WebSocket Relay Server: Room management and Spectator PIN rate limiting', async (t) => {
   const server = http.createServer();
   const wss = new WebSocketServer({ server });
@@ -91,90 +103,106 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     wsSpectator.close();
   });
 
-  await t.test('Relay persists track metadata across NOW_PLAYING_UPDATE playback packets', async () => {
-    const { ws: wsGateway } = await registerGateway(port, 'token-spotify', '4829');
+  await t.test(
+    'Relay persists track metadata across NOW_PLAYING_UPDATE playback packets',
+    async () => {
+      const { ws: wsGateway } = await registerGateway(port, 'token-spotify', '4829');
 
-    // 1. Send track metadata with PLAYING state
-    wsGateway.send(
-      JSON.stringify({
-        type: 'NOW_PLAYING_UPDATE',
-        sessionId: 'token-spotify',
-        timestamp: Date.now(),
-        playback: { state: 'PLAYING', positionMs: 10000, capturedAt: Date.now(), isLiveSync: true },
-        track: {
-          trackId: '4cOdK2wGLETKBW3PvgPWqT',
-          title: 'The Pretender',
-          artist: 'Foo Fighters',
-          durationMs: 269000,
-          spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
-        },
-      }),
-    );
+      // 1. Send track metadata with PLAYING state
+      wsGateway.send(
+        JSON.stringify({
+          type: 'NOW_PLAYING_UPDATE',
+          sessionId: 'token-spotify',
+          timestamp: Date.now(),
+          playback: {
+            state: 'PLAYING',
+            positionMs: 10000,
+            capturedAt: Date.now(),
+            isLiveSync: true,
+          },
+          track: {
+            trackId: '4cOdK2wGLETKBW3PvgPWqT',
+            title: 'The Pretender',
+            artist: 'Foo Fighters',
+            durationMs: 269000,
+            spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+          },
+        }),
+      );
 
-    // 2. Gateway sends a state-only packet with track: null (e.g. Android playbackstatechanged)
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    wsGateway.send(
-      JSON.stringify({
-        type: 'NOW_PLAYING_UPDATE',
-        sessionId: 'token-spotify',
-        timestamp: Date.now(),
-        playback: { state: 'PLAYING', positionMs: 15000, capturedAt: Date.now(), isLiveSync: true },
-        track: null,
-      }),
-    );
+      // 2. Gateway sends a state-only packet with track: null (e.g. Android playbackstatechanged)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      wsGateway.send(
+        JSON.stringify({
+          type: 'NOW_PLAYING_UPDATE',
+          sessionId: 'token-spotify',
+          timestamp: Date.now(),
+          playback: {
+            state: 'PLAYING',
+            positionMs: 15000,
+            capturedAt: Date.now(),
+            isLiveSync: true,
+          },
+          track: null,
+        }),
+      );
 
-    // 3. New spectator connects and receives replayed lastNowPlaying
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const wsSpectator = new WebSocket(
-      `ws://localhost:${port}/api/ws/session?token=token-spotify&role=spectator&pin=4829`,
-    );
+      // 3. New spectator connects and receives replayed lastNowPlaying
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const wsSpectator = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-spotify&role=spectator&pin=4829`,
+      );
 
-    const receivedNowPlaying = await new Promise<any>((resolve) => {
-      wsSpectator.on('message', (data) => {
-        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
-        const msg = JSON.parse(text);
-        if (msg.type === 'NOW_PLAYING_UPDATE') {
-          resolve(msg);
-        }
+      const receivedNowPlaying = await new Promise<any>((resolve) => {
+        wsSpectator.on('message', (data) => {
+          const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+          const msg = JSON.parse(text);
+          if (msg.type === 'NOW_PLAYING_UPDATE') {
+            resolve(msg);
+          }
+        });
       });
-    });
 
-    assert.equal(receivedNowPlaying.playback.state, 'PLAYING');
-    assert.ok(receivedNowPlaying.track, 'Track should be preserved in relay');
-    assert.equal(receivedNowPlaying.track.title, 'The Pretender');
-    assert.equal(receivedNowPlaying.track.artist, 'Foo Fighters');
+      assert.equal(receivedNowPlaying.playback.state, 'PLAYING');
+      assert.ok(receivedNowPlaying.track, 'Track should be preserved in relay');
+      assert.equal(receivedNowPlaying.track.title, 'The Pretender');
+      assert.equal(receivedNowPlaying.track.artist, 'Foo Fighters');
 
-    wsGateway.close();
-    wsSpectator.close();
-  });
+      wsGateway.close();
+      wsSpectator.close();
+    },
+  );
 
-  await t.test('Relay rejects spectator connection if incorrect PIN is supplied in query params', async () => {
-    const { ws: wsGateway } = await registerGateway(port, 'token-auth', '4829');
+  await t.test(
+    'Relay rejects spectator connection if incorrect PIN is supplied in query params',
+    async () => {
+      const { ws: wsGateway } = await registerGateway(port, 'token-auth', '4829');
 
-    const wsSpectator = new WebSocket(
-      `ws://localhost:${port}/api/ws/session?token=token-auth&role=spectator&pin=9999`,
-    );
+      const wsSpectator = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-auth&role=spectator&pin=9999`,
+      );
 
-    const errorPromise = new Promise<{ type: string; code: string }>((resolve) => {
-      wsSpectator.on('message', (data) => {
-        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
-        resolve(JSON.parse(text));
+      const errorPromise = new Promise<{ type: string; code: string }>((resolve) => {
+        wsSpectator.on('message', (data) => {
+          const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+          resolve(JSON.parse(text));
+        });
       });
-    });
 
-    const closeCodePromise = new Promise<number>((resolve) => {
-      wsSpectator.on('close', (code) => resolve(code));
-    });
+      const closeCodePromise = new Promise<number>((resolve) => {
+        wsSpectator.on('close', (code) => resolve(code));
+      });
 
-    const errorMsg = await errorPromise;
-    assert.equal(errorMsg.type, 'ERROR');
-    assert.equal(errorMsg.code, 'UNAUTHORIZED_PIN');
+      const errorMsg = await errorPromise;
+      assert.equal(errorMsg.type, 'ERROR');
+      assert.equal(errorMsg.code, 'UNAUTHORIZED_PIN');
 
-    const closeCode = await closeCodePromise;
-    assert.equal(closeCode, 4001);
+      const closeCode = await closeCodePromise;
+      assert.equal(closeCode, 4001);
 
-    wsGateway.close();
-  });
+      wsGateway.close();
+    },
+  );
 
   await t.test('verifySession validates token and pin accurately', async () => {
     const { ws: wsGateway } = await registerGateway(port, 'token-verify', '1234');
@@ -191,96 +219,150 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     wsGateway.close();
   });
 
-  await t.test('Relay persists SESSION_STATE_CHANGED COMPLETED state and replays to late spectators', async () => {
-    const { ws: wsGateway } = await registerGateway(port, 'token-completed', '1234');
+  await t.test(
+    'Relay persists SESSION_STATE_CHANGED COMPLETED state and replays to late spectators',
+    async () => {
+      const { ws: wsGateway } = await registerGateway(port, 'token-completed', '1234');
 
-    wsGateway.send(
-      JSON.stringify({
-        type: 'SESSION_STATE_CHANGED',
-        sessionId: 'token-completed',
-        status: 'COMPLETED',
-        timestamp: Date.now(),
-      }),
-    );
+      wsGateway.send(
+        JSON.stringify({
+          type: 'SESSION_STATE_CHANGED',
+          sessionId: 'token-completed',
+          status: 'COMPLETED',
+          timestamp: Date.now(),
+        }),
+      );
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const wsSpectator = new WebSocket(
-      `ws://localhost:${port}/api/ws/session?token=token-completed&role=spectator&pin=1234`,
-    );
+      const wsSpectator = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-completed&role=spectator&pin=1234`,
+      );
 
-    const receivedState = await new Promise<any>((resolve) => {
-      wsSpectator.on('message', (data) => {
-        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
-        const msg = JSON.parse(text);
-        if (msg.type === 'SESSION_STATE_CHANGED') {
-          resolve(msg);
-        }
+      const receivedState = await new Promise<any>((resolve) => {
+        wsSpectator.on('message', (data) => {
+          const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
+          const msg = JSON.parse(text);
+          if (msg.type === 'SESSION_STATE_CHANGED') {
+            resolve(msg);
+          }
+        });
       });
-    });
 
-    assert.equal(receivedState.status, 'COMPLETED');
+      assert.equal(receivedState.status, 'COMPLETED');
 
-    wsGateway.close();
-    wsSpectator.close();
-  });
+      wsGateway.close();
+      wsSpectator.close();
+    },
+  );
 
-  await t.test('Relay attaches registered targetPaceSecPerKm to telemetry snapshots streamed to spectators', async () => {
-    const wsGateway = new WebSocket(`ws://localhost:${port}/api/ws/session?token=token-targetpace&role=gateway`);
-    await new Promise((resolve) => wsGateway.on('open', resolve));
+  await t.test(
+    'Relay attaches registered targetPaceSecPerKm to telemetry snapshots streamed to spectators',
+    async () => {
+      const wsGateway = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=gateway`,
+      );
+      await new Promise((resolve) => wsGateway.on('open', resolve));
 
-    // Register with targetPaceSecPerKm = 270 (4:30 min/km)
-    wsGateway.send(
-      JSON.stringify({
-        type: 'GATEWAY_REGISTER',
-        sessionId: 'sess-token-targetpace',
-        spectatorPin: '4829',
-        athleteName: 'Víctor',
-        targetPaceSecPerKm: 270,
-        startTime: Date.now(),
-      }),
-    );
+      // Register with targetPaceSecPerKm = 270 (4:30 min/km)
+      wsGateway.send(
+        JSON.stringify({
+          type: 'GATEWAY_REGISTER',
+          sessionId: 'sess-token-targetpace',
+          spectatorPin: '4829',
+          athleteName: 'Víctor',
+          targetPaceSecPerKm: 270,
+          startTime: Date.now(),
+        }),
+      );
 
-    await new Promise((resolve) => setTimeout(resolve, 30));
+      await new Promise((resolve) => setTimeout(resolve, 30));
 
-    const wsSpectator = new WebSocket(
-      `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=spectator&pin=4829`,
-    );
-    await new Promise((resolve) => wsSpectator.on('open', resolve));
+      const wsSpectator = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=spectator&pin=4829`,
+      );
+      await new Promise((resolve) => wsSpectator.on('open', resolve));
 
-    const telemetryPromise = new Promise<any>((resolve) => {
-      wsSpectator.on('message', (data) => {
-        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
-        const msg = JSON.parse(text);
-        if (msg.type === 'TELEMETRY_SNAPSHOT') {
-          resolve(msg);
-        }
-      });
-    });
+      const telemetryPromise = waitForTelemetrySnapshot(wsSpectator);
 
-    // Gateway sends telemetry snapshot WITHOUT explicit targetPaceSecPerKm in metrics
-    wsGateway.send(
-      JSON.stringify({
-        type: 'TELEMETRY_SNAPSHOT',
-        sessionId: 'sess-token-targetpace',
-        seq: 1,
-        timestamp: Date.now(),
-        coordinates: { lat: 39.4699, lng: -0.3763, elevationM: 10, gpsQuality: 4 },
-        metrics: {
-          heartRateBpm: 150,
-          speedMps: 3.5,
-          paceSecPerKm: 285,
-          cadenceSpm: 175,
-          totalDistanceM: 100,
-          elapsedSeconds: 30,
-        },
-      }),
-    );
+      // Gateway sends telemetry snapshot WITHOUT explicit targetPaceSecPerKm in metrics
+      wsGateway.send(
+        JSON.stringify({
+          type: 'TELEMETRY_SNAPSHOT',
+          sessionId: 'sess-token-targetpace',
+          seq: 1,
+          timestamp: Date.now(),
+          coordinates: { lat: 39.4699, lng: -0.3763, elevationM: 10, gpsQuality: 4 },
+          metrics: {
+            heartRateBpm: 150,
+            speedMps: 3.5,
+            paceSecPerKm: 285,
+            cadenceSpm: 175,
+            totalDistanceM: 100,
+            elapsedSeconds: 30,
+          },
+        }),
+      );
 
-    const receivedTelemetry = await telemetryPromise;
-    assert.equal(receivedTelemetry.metrics.targetPaceSecPerKm, 270);
+      const receivedTelemetry = await telemetryPromise;
+      assert.equal(receivedTelemetry.metrics.targetPaceSecPerKm, 270);
 
-    wsGateway.close();
-    wsSpectator.close();
-  });
+      wsGateway.close();
+      wsSpectator.close();
+    },
+  );
+
+  await t.test(
+    'Relay attaches registered totalRaceDistanceM to telemetry snapshots streamed to spectators',
+    async () => {
+      const wsGateway = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-racedist&role=gateway`,
+      );
+      await new Promise((resolve) => wsGateway.on('open', resolve));
+
+      wsGateway.send(
+        JSON.stringify({
+          type: 'GATEWAY_REGISTER',
+          sessionId: 'sess-token-racedist',
+          spectatorPin: '4829',
+          athleteName: 'Víctor',
+          totalRaceDistanceM: 10000,
+          startTime: Date.now(),
+        }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const wsSpectator = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=token-racedist&role=spectator&pin=4829`,
+      );
+      await new Promise((resolve) => wsSpectator.on('open', resolve));
+
+      const telemetryPromise = waitForTelemetrySnapshot(wsSpectator);
+
+      wsGateway.send(
+        JSON.stringify({
+          type: 'TELEMETRY_SNAPSHOT',
+          sessionId: 'sess-token-racedist',
+          seq: 1,
+          timestamp: Date.now(),
+          coordinates: { lat: 39.4699, lng: -0.3763, elevationM: 10, gpsQuality: 4 },
+          metrics: {
+            heartRateBpm: 155,
+            speedMps: 3.5,
+            paceSecPerKm: 285,
+            cadenceSpm: 175,
+            totalDistanceM: 500,
+            elapsedSeconds: 120,
+          },
+        }),
+      );
+
+      const receivedTelemetry = await telemetryPromise;
+      assert.equal(receivedTelemetry.metrics.totalRaceDistanceM, 10000);
+
+      wsGateway.close();
+      wsSpectator.close();
+    },
+  );
 });

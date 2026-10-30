@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ActionButton } from '../components/ui/button';
-import { StatusBadge } from '../components/ui/badge';
-import { Flame, KeyRound, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
+import { Flame, KeyRound, ArrowRight } from 'lucide-react';
+import { requestNotificationPermissionUpfront } from '../utils/notificationPermissions';
 
 function LandingHeader() {
   const athlete = process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
@@ -121,26 +121,6 @@ function SessionLookupForm({
   );
 }
 
-function DemoQuickAccessCard({ onQuickConnect }: { onQuickConnect: () => void }) {
-  return (
-    <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Activity className="w-4 h-4 text-emerald-500" />
-        <span className="text-xs font-semibold text-slate-700">Sesión Activa</span>
-        <StatusBadge variant="live">EN VIVO</StatusBadge>
-      </div>
-      <button
-        type="button"
-        onClick={onQuickConnect}
-        className="text-xs font-bold text-orange-600 hover:text-orange-700 transition-colors inline-flex items-center gap-1"
-      >
-        <span>Autocompletar</span>
-        <ShieldCheck className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  );
-}
-
 function useSessionVerifier() {
   const router = useRouter();
   const [token, setToken] = useState('carrera-victor');
@@ -179,6 +159,7 @@ function useSessionVerifier() {
         return;
       }
 
+      await requestNotificationPermissionUpfront();
       router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
     } catch {
       setError('No se pudo verificar el PIN con el servidor. Comprueba la conexión.');
@@ -190,8 +171,7 @@ function useSessionVerifier() {
 }
 
 export default function SpectatorLandingPage() {
-  const { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit } =
-    useSessionVerifier();
+  const { token, setToken, pin, setPin, error, isLoading, handleSubmit } = useSessionVerifier();
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex items-center justify-center">
@@ -206,13 +186,6 @@ export default function SpectatorLandingPage() {
             error={error}
             isLoading={isLoading}
             onSubmit={handleSubmit}
-          />
-          <DemoQuickAccessCard
-            onQuickConnect={() => {
-              setToken('carrera-victor');
-              setPin('');
-              setError(null);
-            }}
           />
         </div>
       </div>

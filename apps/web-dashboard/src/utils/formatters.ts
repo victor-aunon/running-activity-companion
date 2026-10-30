@@ -76,11 +76,7 @@ export function formatPaceDifference(
 
   const isFaster = diff < 0;
   const isSlower = diff > 0;
-  const colorClass = isFaster
-    ? 'text-emerald-600'
-    : isSlower
-      ? 'text-amber-600'
-      : 'text-teal-600';
+  const colorClass = isFaster ? 'text-emerald-600' : isSlower ? 'text-amber-600' : 'text-teal-600';
   const icon = isFaster ? '↘' : isSlower ? '↗' : '✓';
 
   return { text, colorClass, icon, diffSeconds: diff };

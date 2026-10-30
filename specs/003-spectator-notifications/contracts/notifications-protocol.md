@@ -127,3 +127,34 @@ El componente `CheerWallTile` despacha el comando `DISPATCH_CHEER` utilizando el
 - En la interfaz de usuario, el formulario NO renderiza `<input type="password" placeholder="PIN"...>`.
 - `senderName` se ingresa por el espectador (o se recupera de `localStorage`).
 - `spectatorPin` se añade de forma automática en el cliente al invocar `onSendCheer`.
+
+---
+
+## 5. Exportaciones y Esquemas en `@running-support/shared-contracts`
+
+- Esquema JSON formal: `packages/shared-contracts/spectator-notifications.schema.json`
+- Tipos de TypeScript exportados en `packages/shared-contracts/src/index.ts`:
+  - `SpectatorNotification` / `SpectatorNotificationEvent`
+  - `NotificationType` (`MILESTONE_25` | `MILESTONE_50` | `MILESTONE_75` | `EXERTION` | `SPRINT`)
+  - `NotificationCta` (`label`, `action: 'SCROLL_CHEER_WALL'`, `presetId?: CheerPreset`, `customText?: string`)
+  - Guardas de tipo: `isSpectatorNotification`, `isSpectatorNotificationEvent`
+  - Campo extendido en `RunningMetrics`: `totalRaceDistanceM?: number`
+  - Campo extendido en `GatewayRegisterMessage`: `totalRaceDistanceM?: number`
+
+---
+
+## 6. Variables de Entorno para Umbrales de Notificación
+
+El motor de notificaciones (`useSpectatorNotifications`) lee las siguientes variables de entorno para calibrar los disparadores fisiológicos sin valores fijos en el código:
+
+| Variable | Tipo | Default | Descripción |
+| :--- | :--- | :--- | :--- |
+| `NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM` | `number` | `175` (o `NEXT_PUBLIC_ZONE_4_MAX`) | Umbral de FC (BPM) para alerta de alto esfuerzo |
+| `NEXT_PUBLIC_NOTIF_EXERTION_COOLDOWN_SEC` | `number` | `30` | Ventana de enfriamiento entre alertas de esfuerzo (segundos) |
+| `NEXT_PUBLIC_NOTIF_EXERTION_MAX_CONSECUTIVE` | `number` | `3` | Límite máximo de alertas consecutivas de esfuerzo |
+| `NEXT_PUBLIC_NOTIF_SPRINT_HR_BPM` | `number` | `175` | Umbral de FC (BPM) requerido para detectar sprint |
+| `NEXT_PUBLIC_NOTIF_SPRINT_CADENCE_SPM` | `number` | `180` | Umbral de cadencia (SPM) requerido para sprint |
+| `NEXT_PUBLIC_NOTIF_SPRINT_FINAL_DISTANCE_M` | `number` | `2000` | Metros restantes para considerar fase final de sprint |
+| `NEXT_PUBLIC_NOTIF_SPRINT_COOLDOWN_SEC` | `number` | `30` | Ventana de enfriamiento entre alertas de sprint estándar |
+| `NEXT_PUBLIC_NOTIF_SPRINT_MAX_CONSECUTIVE` | `number` | `3` | Límite máximo de alertas consecutivas de sprint estándar |
+

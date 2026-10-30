@@ -149,16 +149,36 @@ El archivo APK resultante se generará en:
 Copia `.env.example` a `.env.local` y ajusta según tu entorno:
 
 ```ini
-# Nombre mostrado en la cabecera del dashboard
+# Configuración del Atleta y Carrera
 NEXT_PUBLIC_ATHLETE_NAME="Víctor"
-
-# Localidad del evento
 NEXT_PUBLIC_DEFAULT_LOCALITY="Madrid"
+NEXT_PUBLIC_TARGET_PACE="4:30"
+NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M=10000
 
-# Endpoint de conexión WebSocket para los espectadores
+# Zonas Dinámicas de Esfuerzo Cardíaco (BPM)
+NEXT_PUBLIC_ZONE_1_MAX=130
+NEXT_PUBLIC_ZONE_2_MAX=145
+NEXT_PUBLIC_ZONE_3_MAX=160
+NEXT_PUBLIC_ZONE_4_MAX=175
+NEXT_PUBLIC_ZONE_5_MAX=195
+
+# Rangos Dinámicos de Cadencia (Pasos por Minuto - SPM)
+NEXT_PUBLIC_CADENCE_LOW_MAX=155
+NEXT_PUBLIC_CADENCE_MODERATE_MAX=169
+NEXT_PUBLIC_CADENCE_OPTIMAL_MAX=185
+
+# Umbrales y Gatillos de Notificaciones para Espectadores
+NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM=175          # Pulso (BPM) para alerta de alto esfuerzo (o hereda NEXT_PUBLIC_ZONE_4_MAX)
+NEXT_PUBLIC_NOTIF_EXERTION_COOLDOWN_SEC=30     # Cooldown entre alertas consecutivas de esfuerzo (segundos)
+NEXT_PUBLIC_NOTIF_EXERTION_MAX_CONSECUTIVE=3   # Límite máximo de alertas consecutivas de esfuerzo
+NEXT_PUBLIC_NOTIF_SPRINT_HR_BPM=175            # Pulso mínimo (BPM) requerido para condición de sprint
+NEXT_PUBLIC_NOTIF_SPRINT_CADENCE_SPM=180       # Cadencia mínima (SPM) requerida para condición de sprint
+NEXT_PUBLIC_NOTIF_SPRINT_FINAL_DISTANCE_M=2000 # Distancia restante (metros) para considerar fase final (disparo único)
+NEXT_PUBLIC_NOTIF_SPRINT_COOLDOWN_SEC=30       # Cooldown entre alertas de sprint en fase estándar
+NEXT_PUBLIC_NOTIF_SPRINT_MAX_CONSECUTIVE=3     # Límite de alertas consecutivas de sprint en fase estándar
+
+# Conexión WebSocket y Servidor
 NEXT_PUBLIC_WS_URL="ws://localhost:3001/api/ws/session"
-
-# Puerto HTTP del frontend Next.js
 PORT=3000
 ```
 *(En producción con SSL, cambia `NEXT_PUBLIC_WS_URL` por `wss://tudominio.com/api/ws/session`)*.

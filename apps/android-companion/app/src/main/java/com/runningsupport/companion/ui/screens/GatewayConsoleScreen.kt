@@ -41,6 +41,8 @@ fun GatewayConsoleScreen(
     lastExportUri: Uri? = null,
     targetPace: String = "4:30",
     onTargetPaceChange: (String) -> Unit = {},
+    targetDistanceKm: String = "10.0",
+    onTargetDistanceKmChange: (String) -> Unit = {},
     onSessionNameChange: (String) -> Unit,
     onSpectatorPinChange: (String) -> Unit,
     onServerUrlChange: (String) -> Unit,
@@ -224,6 +226,39 @@ fun GatewayConsoleScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "💡 Ejemplo: 4:30 (se envía a los espectadores como ritmo de referencia)",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+            }
+
+            // Target Distance Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "DISTANCIA OBJETIVO DE CARRERA (KM)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = targetDistanceKm,
+                        onValueChange = onTargetDistanceKmChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("10.0") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "💡 Ejemplo: 10.0 para 10K, 21.1 para Media Maratón, 42.2 para Maratón",
                         fontSize = 11.sp,
                         color = Color(0xFF64748B)
                     )

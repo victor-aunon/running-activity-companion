@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WebSocketClient } from '../services/WebSocketClient';
 import type { ConnectionState } from '../services/WebSocketClient';
 import type {

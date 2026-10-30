@@ -1,6 +1,7 @@
 import type {
   TelemetrySnapshotPacket,
   NowPlayingUpdatePacket,
+  SpectatorNotification,
 } from '@running-support/shared-contracts';
 import type { CheerItem } from '../types/cheer';
 
@@ -23,6 +24,8 @@ export const MOCK_STITCH_TELEMETRY: TelemetrySnapshotPacket = {
     stepCount: 8690,
     totalDistanceM: 10420,
     elapsedSeconds: 2895,
+    targetPaceSecPerKm: 270,
+    totalRaceDistanceM: 10000,
   },
   deviceHealth: {
     watchBatteryPct: 92,
@@ -30,6 +33,66 @@ export const MOCK_STITCH_TELEMETRY: TelemetrySnapshotPacket = {
     bleRssi: -58,
   },
 };
+
+export const MOCK_STITCH_EXERTION_TELEMETRY: TelemetrySnapshotPacket = {
+  ...MOCK_STITCH_TELEMETRY,
+  metrics: {
+    ...MOCK_STITCH_TELEMETRY.metrics,
+    heartRateBpm: 188,
+    cadenceSpm: 198,
+    speedMps: 4.85,
+    paceSecPerKm: 206,
+  },
+};
+
+export const MOCK_SPECTATOR_NOTIFICATIONS: SpectatorNotification[] = [
+  {
+    id: 'mock-notif-m25',
+    type: 'MILESTONE_25',
+    title: '¡25% Completado!',
+    message: 'Víctor ha completado el primer cuarto del recorrido (2.5 km).',
+    timestamp: 1792576500000,
+    durationMs: 6000,
+  },
+  {
+    id: 'mock-notif-m50',
+    type: 'MILESTONE_50',
+    title: '¡Ecuador de Carrera (50%)!',
+    message: '¡Mitad de carrera completada! Ritmo medio constante.',
+    timestamp: 1792576700000,
+    durationMs: 6000,
+  },
+  {
+    id: 'mock-notif-m75',
+    type: 'MILESTONE_75',
+    title: '¡Fase Decisiva (75%)!',
+    message: '¡Entrando en los últimos kilómetros! Es el momento de apretar.',
+    timestamp: 1792576900000,
+    durationMs: 6000,
+  },
+  {
+    id: 'mock-notif-exertion',
+    type: 'EXERTION',
+    title: 'Alto Esfuerzo',
+    message: 'Víctor está haciendo un esfuerzo (188 bpm).',
+    timestamp: 1792576950000,
+    durationMs: 6000,
+  },
+  {
+    id: 'mock-notif-sprint',
+    type: 'SPRINT',
+    title: '¡Sprint en curso!',
+    message: '¡Víctor está sprintando a 192 bpm y 212 spm!',
+    timestamp: 1792577000000,
+    durationMs: 8000,
+    cta: {
+      label: '¡Envíale un ánimo!',
+      action: 'SCROLL_CHEER_WALL',
+      presetId: 'MUCHO_ANIMO',
+      customText: '¡A por el sprint final!',
+    },
+  },
+];
 
 export const MOCK_STITCH_CHEERS: CheerItem[] = [
   {
@@ -117,5 +180,6 @@ export const MOCK_STITCH_FIXTURE = {
   cheers: MOCK_STITCH_CHEERS,
   pathCoordinates: MOCK_STITCH_PATH,
   nowPlaying: MOCK_STITCH_NOW_PLAYING_ACTIVE,
+  notifications: MOCK_SPECTATOR_NOTIFICATIONS,
   config: MOCK_STITCH_CONFIG,
 };

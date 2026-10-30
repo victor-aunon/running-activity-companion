@@ -107,6 +107,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            var targetDistanceKm by remember {
+                mutableStateOf(
+                    prefs.getString(KEY_TARGET_DISTANCE_KM, DEFAULT_TARGET_DISTANCE_KM) ?: DEFAULT_TARGET_DISTANCE_KM
+                )
+            }
+
             var session by remember {
                 mutableStateOf(sessionManager.getOrCreateSession(sessionName, spectatorPin))
             }
@@ -201,6 +207,11 @@ class MainActivity : ComponentActivity() {
                     targetPace = newPace
                     prefs.edit().putString(KEY_TARGET_PACE, newPace).apply()
                 },
+                targetDistanceKm = targetDistanceKm,
+                onTargetDistanceKmChange = { newDist ->
+                    targetDistanceKm = newDist
+                    prefs.edit().putString(KEY_TARGET_DISTANCE_KM, newDist).apply()
+                },
                 onSessionNameChange = { newName ->
                     val clean = newName.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "-")
                     sessionName = clean
@@ -218,14 +229,14 @@ class MainActivity : ComponentActivity() {
                 onToggleSimulationMode = { enabled ->
                     isSimulationMode = enabled
                     if (isServiceRunning) {
-                        startTrackingService(session, serverUrl, enabled, targetPace)
+                        startTrackingService(session, serverUrl, enabled, targetPace, targetDistanceKm)
                     }
                 },
                 onToggleService = { enabled ->
                     if (enabled) {
                         val activeSession = sessionManager.getOrCreateSession(sessionName, spectatorPin)
                         session = activeSession
-                        startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace)
+                        startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace, targetDistanceKm)
                     } else {
                         val sId = session?.sessionId ?: sessionName
                         coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -300,15 +311,24 @@ class MainActivity : ComponentActivity() {
         return 270.0
     }
 
+    private fun parseTargetDistanceToMeters(distStr: String): Double {
+        val clean = distStr.trim().replace(",", ".")
+        val num = clean.toDoubleOrNull()
+        if (num != null && num > 0) return num * 1000.0
+        return 10000.0
+    }
+
     private fun startTrackingService(
         session: ActiveSessionState,
         serverUrl: String,
         isSimulation: Boolean,
-        targetPaceStr: String
+        targetPaceStr: String,
+        targetDistanceKmStr: String
     ) {
         try {
             val resolvedUrl = sanitizeServerUrl(serverUrl)
             val targetPaceSec = parseTargetPaceToSeconds(targetPaceStr)
+            val targetDistanceM = parseTargetDistanceToMeters(targetDistanceKmStr)
             val serviceIntent = Intent(this, RunningActivityService::class.java).apply {
                 putExtra(RunningActivityService.EXTRA_TOKEN, session.token)
                 putExtra(RunningActivityService.EXTRA_SESSION_ID, session.sessionId)
@@ -316,6 +336,7 @@ class MainActivity : ComponentActivity() {
                 putExtra(RunningActivityService.EXTRA_SERVER_URL, resolvedUrl)
                 putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
                 putExtra(RunningActivityService.EXTRA_TARGET_PACE_SEC, targetPaceSec)
+                putExtra(RunningActivityService.EXTRA_TOTAL_RACE_DISTANCE_M, targetDistanceM)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
@@ -343,6 +364,8 @@ class MainActivity : ComponentActivity() {
         const val KEY_SPECTATOR_PIN = "spectator_pin"
         const val KEY_TARGET_PACE = "target_pace"
         const val DEFAULT_TARGET_PACE = "4:30"
+        const val KEY_TARGET_DISTANCE_KM = "target_distance_km"
+        const val DEFAULT_TARGET_DISTANCE_KM = "10.0"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
     }
 }

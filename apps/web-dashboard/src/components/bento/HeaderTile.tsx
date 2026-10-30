@@ -95,10 +95,7 @@ function AthleteInfo({
           <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">
             {athleteName} en Carrera
           </h1>
-          <StatusBadge
-            variant={badgeVariant}
-            className="px-2.5 py-0.5 text-xs font-semibold"
-          >
+          <StatusBadge variant={badgeVariant} className="px-2.5 py-0.5 text-xs font-semibold">
             {badgeText}
           </StatusBadge>
         </div>

@@ -140,8 +140,16 @@ interface CheerSenderState {
 }
 
 function executeCheerSend(state: CheerSenderState, presetId: CheerPreset, body: string) {
-  const { client, sessionId, pin, senderName, rateLimitSeconds, setSubmitting, setErrorMsg, setCheers } =
-    state;
+  const {
+    client,
+    sessionId,
+    pin,
+    senderName,
+    rateLimitSeconds,
+    setSubmitting,
+    setErrorMsg,
+    setCheers,
+  } = state;
   if (rateLimitSeconds > 0) return;
   if (!senderName.trim()) {
     setErrorMsg('Por favor, indica tu nombre para enviar un mensaje de ánimo.');
