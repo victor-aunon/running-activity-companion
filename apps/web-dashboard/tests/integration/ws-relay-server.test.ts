@@ -4,8 +4,27 @@ import { WebSocketServer, WebSocket } from 'ws';
 import http from 'node:http';
 import { createRelayServer } from '../../src/services/RelayServerLogic.ts';
 
+async function safeClose(ws?: WebSocket | null): Promise<void> {
+  if (!ws || ws.readyState === WebSocket.CLOSED) return;
+  await new Promise<void>((resolve) => {
+    ws.once('close', () => resolve());
+    try {
+      ws.close();
+    } catch {
+      resolve();
+    }
+    setTimeout(() => {
+      try {
+        ws.terminate();
+      } catch {}
+      resolve();
+    }, 50);
+  });
+}
+
 async function registerGateway(port: number, token: string, pin: string) {
   const ws = new WebSocket(`ws://localhost:${port}/api/ws/session?token=${token}&role=gateway`);
+  ws.on('error', () => {});
   await new Promise((resolve) => ws.on('open', resolve));
   const ackPromise = new Promise<{ type: string; status: string }>((resolve) => {
     ws.on('message', (data) => {
@@ -66,22 +85,33 @@ function waitForTelemetrySnapshot(ws: WebSocket): Promise<any> {
 void test('WebSocket Relay Server: Room management and Spectator PIN rate limiting', async (t) => {
   const server = http.createServer();
   const wss = new WebSocketServer({ server });
-  const relay = createRelayServer(wss);
+  const relay = createRelayServer(wss, { silent: true });
 
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const port = (server.address() as { port: number }).port;
 
-  t.after(() => {
+  t.after(async () => {
     relay.close();
-    wss.close();
-    server.close();
+    for (const client of wss.clients) {
+      try {
+        client.removeAllListeners();
+        client.terminate();
+      } catch {
+        // Safe disposal
+      }
+    }
+    await new Promise<void>((resolve) => wss.close(() => resolve()));
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   await t.test('Gateway registers session with PIN', async () => {
     const { ws, ack } = await registerGateway(port, 'token-123', '4829');
     assert.equal(ack.type, 'GATEWAY_REGISTER_ACK');
     assert.equal(ack.status, 'READY');
-    ws.close();
+    await safeClose(ws);
   });
 
   await t.test('Spectator triggers PIN rate limiting after 5 failed attempts', async () => {
@@ -89,6 +119,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     const wsSpectator = new WebSocket(
       `ws://localhost:${port}/api/ws/session?token=token-pin&role=spectator`,
     );
+    wsSpectator.on('error', () => {});
     await new Promise((resolve) => wsSpectator.on('open', resolve));
 
     for (let i = 0; i < 4; i++) {
@@ -99,8 +130,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     const rateLimitErr = await sendFailedCheer(wsSpectator, 'notif-5');
     assert.equal(rateLimitErr.code, 'PIN_RATE_LIMITED');
 
-    wsGateway.close();
-    wsSpectator.close();
+    await safeClose(wsGateway);
+    await safeClose(wsSpectator);
   });
 
   await t.test(
@@ -152,6 +183,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsSpectator = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-spotify&role=spectator&pin=4829`,
       );
+      wsSpectator.on('error', () => {});
 
       const receivedNowPlaying = await new Promise<any>((resolve) => {
         wsSpectator.on('message', (data) => {
@@ -168,8 +200,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       assert.equal(receivedNowPlaying.track.title, 'The Pretender');
       assert.equal(receivedNowPlaying.track.artist, 'Foo Fighters');
 
-      wsGateway.close();
-      wsSpectator.close();
+      await safeClose(wsGateway);
+      await safeClose(wsSpectator);
     },
   );
 
@@ -181,6 +213,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsSpectator = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-auth&role=spectator&pin=9999`,
       );
+      wsSpectator.on('error', () => {});
 
       const errorPromise = new Promise<{ type: string; code: string }>((resolve) => {
         wsSpectator.on('message', (data) => {
@@ -200,7 +233,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const closeCode = await closeCodePromise;
       assert.equal(closeCode, 4001);
 
-      wsGateway.close();
+      await safeClose(wsGateway);
+      await safeClose(wsSpectator);
     },
   );
 
@@ -216,7 +250,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
     const nonExistentResult = relay.verifySession('unknown-session', '1234');
     assert.equal(nonExistentResult.valid, false);
 
-    wsGateway.close();
+    await safeClose(wsGateway);
   });
 
   await t.test(
@@ -238,6 +272,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsSpectator = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-completed&role=spectator&pin=1234`,
       );
+      wsSpectator.on('error', () => {});
 
       const receivedState = await new Promise<any>((resolve) => {
         wsSpectator.on('message', (data) => {
@@ -251,8 +286,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
 
       assert.equal(receivedState.status, 'COMPLETED');
 
-      wsGateway.close();
-      wsSpectator.close();
+      await safeClose(wsGateway);
+      await safeClose(wsSpectator);
     },
   );
 
@@ -262,6 +297,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsGateway = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=gateway`,
       );
+      wsGateway.on('error', () => {});
       await new Promise((resolve) => wsGateway.on('open', resolve));
 
       // Register with targetPaceSecPerKm = 270 (4:30 min/km)
@@ -281,6 +317,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsSpectator = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-targetpace&role=spectator&pin=4829`,
       );
+      wsSpectator.on('error', () => {});
       await new Promise((resolve) => wsSpectator.on('open', resolve));
 
       const telemetryPromise = waitForTelemetrySnapshot(wsSpectator);
@@ -307,8 +344,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const receivedTelemetry = await telemetryPromise;
       assert.equal(receivedTelemetry.metrics.targetPaceSecPerKm, 270);
 
-      wsGateway.close();
-      wsSpectator.close();
+      await safeClose(wsGateway);
+      await safeClose(wsSpectator);
     },
   );
 
@@ -318,6 +355,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsGateway = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-racedist&role=gateway`,
       );
+      wsGateway.on('error', () => {});
       await new Promise((resolve) => wsGateway.on('open', resolve));
 
       wsGateway.send(
@@ -336,6 +374,7 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const wsSpectator = new WebSocket(
         `ws://localhost:${port}/api/ws/session?token=token-racedist&role=spectator&pin=4829`,
       );
+      wsSpectator.on('error', () => {});
       await new Promise((resolve) => wsSpectator.on('open', resolve));
 
       const telemetryPromise = waitForTelemetrySnapshot(wsSpectator);
@@ -361,8 +400,8 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
       const receivedTelemetry = await telemetryPromise;
       assert.equal(receivedTelemetry.metrics.totalRaceDistanceM, 10000);
 
-      wsGateway.close();
-      wsSpectator.close();
+      await safeClose(wsGateway);
+      await safeClose(wsSpectator);
     },
   );
 });
