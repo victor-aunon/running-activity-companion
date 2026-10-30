@@ -2,6 +2,7 @@
   "name": "running-activity-support",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@9.15.5",
   "description": "Real-time running activity support ecosystem (Next.js + Android 16 + Garmin Connect IQ)",
   "workspaces": [
     "apps/*",
