@@ -4,8 +4,11 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.*
 import org.json.JSONObject
@@ -36,6 +39,9 @@ class WebSocketGatewayClient(
     private val _connectionState = MutableSharedFlow<Boolean>(replay = 1)
     val connectionState: SharedFlow<Boolean> = _connectionState.asSharedFlow()
 
+    private val _connectionError = MutableStateFlow<String?>(null)
+    val connectionError: StateFlow<String?> = _connectionError.asStateFlow()
+
     fun connect() {
         shouldReconnect = true
         val fullUrl = "$serverUrl?token=$token&role=gateway"
@@ -45,6 +51,7 @@ class WebSocketGatewayClient(
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     isConnected = true
+                    _connectionError.value = null
                     _connectionState.tryEmit(true)
                     Log.i(TAG, "Gateway WebSocket connected to $fullUrl (HTTP ${response.code})")
 
@@ -73,21 +80,25 @@ class WebSocketGatewayClient(
 
                 override fun onClosing(ws: WebSocket, code: Int, reason: String) {
                     isConnected = false
+                    _connectionError.value = "Cerrando ($code: $reason)"
                     _connectionState.tryEmit(false)
                     Log.w(TAG, "WebSocket onClosing: code=$code, reason=$reason")
                 }
 
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     isConnected = false
+                    _connectionError.value = "Cerrado ($code: $reason)"
                     _connectionState.tryEmit(false)
                     Log.w(TAG, "WebSocket onClosed: code=$code, reason=$reason")
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     isConnected = false
-                    _connectionState.tryEmit(false)
                     val respInfo = if (response != null) " (HTTP ${response.code} ${response.message})" else ""
-                    Log.w(TAG, "WebSocket failure: ${t.javaClass.simpleName} - ${t.message}$respInfo. Reconnecting in 3s...", t)
+                    val errorMsg = "${t.javaClass.simpleName}: ${t.message}$respInfo"
+                    _connectionError.value = errorMsg
+                    _connectionState.tryEmit(false)
+                    Log.w(TAG, "WebSocket failure: $errorMsg. Reconnecting in 3s...", t)
                     if (shouldReconnect) {
                         scope.launch {
                             delay(3000)

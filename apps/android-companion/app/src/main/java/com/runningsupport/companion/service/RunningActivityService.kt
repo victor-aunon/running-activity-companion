@@ -138,6 +138,12 @@ class RunningActivityService : Service() {
                 }
             }
 
+            serviceScope.launch {
+                client.connectionError.collect { err ->
+                    _cloudConnectionErrorState.value = err
+                }
+            }
+
             garminManager?.setTelemetryListener { snapshot ->
                 val type = snapshot.optString("type")
                 if (type == "SESSION_STATE_CHANGED") {
@@ -513,6 +519,9 @@ class RunningActivityService : Service() {
 
         private val _isCloudConnectedState = MutableStateFlow(false)
         val isCloudConnectedState = _isCloudConnectedState.asStateFlow()
+
+        private val _cloudConnectionErrorState = MutableStateFlow<String?>(null)
+        val cloudConnectionErrorState = _cloudConnectionErrorState.asStateFlow()
 
         private val _isGarminConnectedState = MutableStateFlow(false)
         val isGarminConnectedState = _isGarminConnectedState.asStateFlow()

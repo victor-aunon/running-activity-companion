@@ -27,6 +27,7 @@ fun GatewayConsoleScreen(
     isServiceRunning: Boolean,
     isGarminConnected: Boolean,
     isCloudConnected: Boolean,
+    cloudConnectionError: String? = null,
     isSimulationMode: Boolean,
     pendingBufferCount: Int,
     spectatorPin: String,
@@ -444,6 +445,15 @@ fun GatewayConsoleScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isCloudConnected) Color(0xFF16A34A) else Color(0xFFDC2626)
+                        )
+                    }
+
+                    if (!isCloudConnected && !cloudConnectionError.isNullOrBlank()) {
+                        Text(
+                            text = "⚠️ $cloudConnectionError",
+                            fontSize = 11.sp,
+                            color = Color(0xFFDC2626),
+                            lineHeight = 14.sp
                         )
                     }
 

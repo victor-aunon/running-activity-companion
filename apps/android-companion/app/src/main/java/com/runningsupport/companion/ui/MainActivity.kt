@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isServiceRunning by RunningActivityService.isServiceRunningState.collectAsState()
             val isCloudConnected by RunningActivityService.isCloudConnectedState.collectAsState()
+            val cloudConnectionError by RunningActivityService.cloudConnectionErrorState.collectAsState()
             val isGarminConnected by RunningActivityService.isGarminConnectedState.collectAsState()
             val garminDiagnostics by RunningActivityService.garminDiagnosticsState.collectAsState()
             var isSimulationMode by remember { mutableStateOf(false) }
@@ -146,6 +147,7 @@ class MainActivity : ComponentActivity() {
                 isServiceRunning = isServiceRunning,
                 isGarminConnected = isGarminConnected,
                 isCloudConnected = isCloudConnected,
+                cloudConnectionError = cloudConnectionError,
                 isSimulationMode = isSimulationMode,
                 pendingBufferCount = pendingBufferCount,
                 spectatorPin = spectatorPin,
