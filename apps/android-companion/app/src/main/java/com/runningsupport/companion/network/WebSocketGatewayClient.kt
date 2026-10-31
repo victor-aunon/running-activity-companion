@@ -32,6 +32,7 @@ class WebSocketGatewayClient(
     private var webSocket: WebSocket? = null
     private var isConnected = false
     private var shouldReconnect = true
+    private var reconnectJob: kotlinx.coroutines.Job? = null
 
     private val _incomingCheers = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64)
     val incomingCheers: SharedFlow<JSONObject> = _incomingCheers
@@ -100,9 +101,12 @@ class WebSocketGatewayClient(
                     _connectionState.tryEmit(false)
                     Log.w(TAG, "WebSocket failure: $errorMsg. Reconnecting in 3s...", t)
                     if (shouldReconnect) {
-                        scope.launch {
+                        reconnectJob?.cancel()
+                        reconnectJob = scope.launch {
                             delay(3000)
-                            connect()
+                            if (shouldReconnect) {
+                                connect()
+                            }
                         }
                     }
                 }
@@ -197,7 +201,13 @@ class WebSocketGatewayClient(
 
     fun disconnect() {
         shouldReconnect = false
-        webSocket?.close(1000, "Normal closure")
+        reconnectJob?.cancel()
+        reconnectJob = null
+        try {
+            webSocket?.cancel()
+        } catch (e: Exception) {
+            // Ignore
+        }
         webSocket = null
         isConnected = false
         _connectionState.tryEmit(false)

@@ -102,18 +102,21 @@ class RunningActivityService : Service() {
             }
         }
 
-        if (gatewayClient == null) {
-            val client = WebSocketGatewayClient(
-                serverUrl,
-                token,
-                sessionId,
-                pin,
-                currentTargetPaceSec,
-                currentTotalRaceDistanceM,
-                serviceScope
-            )
-            gatewayClient = client
-            client.connect()
+        // Always cleanly terminate previous client so old tokens/connections never linger
+        gatewayClient?.disconnect()
+        gatewayClient = null
+
+        val client = WebSocketGatewayClient(
+            serverUrl,
+            token,
+            sessionId,
+            pin,
+            currentTargetPaceSec,
+            currentTotalRaceDistanceM,
+            serviceScope
+        )
+        gatewayClient = client
+        client.connect()
 
             serviceScope.launch {
                 client.connectionState.collect { connected ->
@@ -180,7 +183,6 @@ class RunningActivityService : Service() {
             setupSpotify(sessionId)
             setupCheersListener(sessionId)
             startInactivityWatchdog(sessionId)
-        }
 
         // Configure simulation mode or real ConnectIQ listener dynamically
         if (isSimulation) {
@@ -292,6 +294,7 @@ class RunningActivityService : Service() {
             }
             delay(300)
             gatewayClient?.disconnect()
+            gatewayClient = null
         }
     }
 
