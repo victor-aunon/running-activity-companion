@@ -23,6 +23,7 @@ class WebSocketGatewayClient(
     private val client = OkHttpClient.Builder()
         .pingInterval(15, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
+        .protocols(listOf(Protocol.HTTP_1_1))
         .build()
 
     private var webSocket: WebSocket? = null
@@ -45,7 +46,7 @@ class WebSocketGatewayClient(
                 override fun onOpen(ws: WebSocket, response: Response) {
                     isConnected = true
                     _connectionState.tryEmit(true)
-                    Log.i(TAG, "Gateway WebSocket connected to $fullUrl")
+                    Log.i(TAG, "Gateway WebSocket connected to $fullUrl (HTTP ${response.code})")
 
                     val registerMsg = JSONObject().apply {
                         put("type", "GATEWAY_REGISTER")
@@ -73,12 +74,20 @@ class WebSocketGatewayClient(
                 override fun onClosing(ws: WebSocket, code: Int, reason: String) {
                     isConnected = false
                     _connectionState.tryEmit(false)
+                    Log.w(TAG, "WebSocket onClosing: code=$code, reason=$reason")
+                }
+
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    isConnected = false
+                    _connectionState.tryEmit(false)
+                    Log.w(TAG, "WebSocket onClosed: code=$code, reason=$reason")
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     isConnected = false
                     _connectionState.tryEmit(false)
-                    Log.w(TAG, "WebSocket failure: ${t.message}. Reconnecting in 3s...")
+                    val respInfo = if (response != null) " (HTTP ${response.code} ${response.message})" else ""
+                    Log.w(TAG, "WebSocket failure: ${t.javaClass.simpleName} - ${t.message}$respInfo. Reconnecting in 3s...", t)
                     if (shouldReconnect) {
                         scope.launch {
                             delay(3000)

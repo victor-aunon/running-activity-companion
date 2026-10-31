@@ -31,6 +31,8 @@ interface SocketCloseContext {
   token: string;
   role: string;
   clientId: string;
+  code?: number;
+  reason?: string;
 }
 
 export interface RelayServerOptions {
@@ -361,15 +363,16 @@ function registerSpectatorConnection(
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
-  const { ws, room, token, role, clientId } = ctx;
+  const { ws, room, token, role, clientId, code, reason } = ctx;
+  const detail = code != null ? ` [Código: ${code}${reason ? ` | Motivo: "${reason}"` : ''}]` : '';
   if (role === 'gateway') {
     if (room.gatewayWs === ws) room.gatewayWs = null;
     room.hasLoggedFirstTelemetry = false;
-    relayLog(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"`);
+    relayLog(`🔌 [RELAY] Pasarela Android desconectada de sesión "${token}"${detail}`);
   } else if (room.spectators.get(clientId) === ws) {
     room.spectators.delete(clientId);
     relayLog(
-      `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})`,
+      `🔌 [RELAY] Espectador desconectado de sesión "${token}" (Restantes: ${room.spectators.size})${detail}`,
     );
   }
 }
@@ -452,7 +455,13 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     clientRateLimits.set(ws, tracker);
 
     ws.on('message', (raw) => handleSocketMessage(ws, room, tracker, raw));
-    ws.on('close', () => handleSocketClose({ ws, room, rooms, token, role, clientId }));
+    ws.on('error', (err) => {
+      relayWarn(`⚠️ [RELAY] Error en socket "${token}" (${role}): ${err.message}`);
+    });
+    ws.on('close', (code, reason) => {
+      const reasonStr = reason ? reason.toString('utf-8') : '';
+      handleSocketClose({ ws, room, rooms, token, role, clientId, code, reason: reasonStr });
+    });
   });
 
   return {

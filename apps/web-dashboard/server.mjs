@@ -34,11 +34,16 @@ const wss = new WebSocketServer({ noServer: true });
 const relay = createRelayServer(wss, { verbose: isVerbose });
 
 server.on('upgrade', (req, socket, head) => {
+  socket.on('error', (err) => {
+    console.warn(`⚠️ [SOCKET UPGRADE ERROR]: ${err.message}`);
+  });
   const { pathname } = parse(req.url || '');
   if (pathname === '/api/ws/session') {
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
     });
+  } else {
+    socket.destroy();
   }
 });
 
