@@ -85,6 +85,7 @@ app/build/
 
 # Gradle files
 .gradle/
+.kotlin/
 build/
 local.properties
 .signing/
