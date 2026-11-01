@@ -76,7 +76,11 @@ server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
-const wss = new WebSocketServer({ noServer: true });
+// Disable perMessageDeflate to prevent proxy compression desync (Context Takeover) that causes 1006 disconnects in browsers behind Traefik
+const wss = new WebSocketServer({
+  noServer: true,
+  perMessageDeflate: false,
+});
 const relay = createRelayServer(wss, { verbose: isVerbose });
 
 server.on('upgrade', (req, socket, head) => {
