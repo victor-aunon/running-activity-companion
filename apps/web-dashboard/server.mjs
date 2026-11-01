@@ -78,6 +78,82 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ coordinates }));
     return;
   }
+  if (parsedUrl.pathname === '/api/session/stream') {
+    const token = (parsedUrl.query.token || '').toString().trim().toLowerCase();
+    const pin = (parsedUrl.query.pin || '').toString().trim();
+
+    // Verify PIN if session requires PIN
+    const verify = relay.verifySession ? relay.verifySession(token, pin) : { valid: true };
+    if (!verify.valid && verify.error) {
+      res.writeHead(401, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(JSON.stringify({ error: verify.error }));
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no',
+    });
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    // Deliver backlog messages immediately
+    const backlog = relay.getSpectatorBacklogMessages ? relay.getSpectatorBacklogMessages(token) : [];
+    for (const msg of backlog) {
+      res.write(`data: ${msg}\n\n`);
+    }
+
+    // Subscribe to ongoing live broadcasts
+    const unsubscribe = relay.subscribeSseSpectator
+      ? relay.subscribeSseSpectator(token, (payload) => {
+          res.write(`data: ${payload}\n\n`);
+        })
+      : () => {};
+
+    // Keep-alive heartbeat comment every 15s to keep all intermediate proxies active
+    const heartbeatTimer = setInterval(() => {
+      res.write(`: ping\n\n`);
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(heartbeatTimer);
+      unsubscribe();
+    });
+    return;
+  }
+  if (parsedUrl.pathname === '/api/session/cheer' && req.method === 'POST') {
+    let rawBody = '';
+    req.on('data', (chunk) => {
+      rawBody += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(rawBody || '{}');
+        const result = relay.dispatchCheerHttp
+          ? relay.dispatchCheerHttp(payload)
+          : { success: false, status: 500, message: 'Relay no disponible' };
+        res.writeHead(result.status || (result.success ? 200 : 400), {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify(result));
+      } catch {
+        res.writeHead(400, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify({ success: false, error: 'JSON malformado' }));
+      }
+    });
+    return;
+  }
   void handle(req, res, parsedUrl);
 });
 

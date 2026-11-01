@@ -1,6 +1,7 @@
 /**
- * Resilient WebSocket Client Adapter for Next.js Web Dashboard
- * Handles heartbeat pings (15s), exponential backoff reconnection, and typed message dispatch
+ * Resilient Client Adapter for Next.js Web Dashboard
+ * Transparently supports Server-Sent Events (SSE) + HTTP POST for spectators
+ * and WebSocket for direct gateway connections and testing.
  */
 
 import type {
@@ -25,6 +26,7 @@ export interface WebSocketClientOptions {
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
+  private es: EventSource | null = null;
   private options: Required<WebSocketClientOptions>;
   private clientId: string;
   private messageHandlers: Set<MessageHandler> = new Set();
@@ -36,13 +38,11 @@ export class WebSocketClient {
   private explicitlyClosed = false;
   private lastPackets: Map<string, WebSocketDownlinkMessage> = new Map();
 
-  private getDiagnosticContext(): { role: string; clientId: string; endpoint: string } {
-    const url = new URL(this.options.url, window.location.origin.replace(/^http/, 'ws'));
-    url.search = '';
+  private getDiagnosticContext(): { role: string; clientId: string; transport: string } {
     return {
       role: this.options.role,
       clientId: this.clientId,
-      endpoint: `${url.origin}${url.pathname}`,
+      transport: this.es ? 'SSE' : 'WebSocket',
     };
   }
 
@@ -60,7 +60,7 @@ export class WebSocketClient {
     this.reconnectDelay = this.options.initialReconnectDelayMs;
   }
 
-  private disposeSocket(): void {
+  private disposeConnection(): void {
     if (this.ws) {
       try {
         this.ws.onclose = null;
@@ -70,6 +70,17 @@ export class WebSocketClient {
         // Safe disposal of existing socket
       }
       this.ws = null;
+    }
+    if (this.es) {
+      try {
+        this.es.onopen = null;
+        this.es.onmessage = null;
+        this.es.onerror = null;
+        this.es.close();
+      } catch {
+        // Safe disposal of existing EventSource
+      }
+      this.es = null;
     }
   }
 
@@ -88,13 +99,68 @@ export class WebSocketClient {
     if (typeof window === 'undefined') return; // Browser only
     this.explicitlyClosed = false;
     this.setState('CONNECTING');
-    this.disposeSocket();
+    this.disposeConnection();
 
+    if (this.options.role === 'spectator' && typeof EventSource !== 'undefined') {
+      this.connectSse();
+    } else {
+      this.connectWs();
+    }
+  }
+
+  private connectSse(): void {
+    try {
+      const sseUrl = new URL('/api/session/stream', window.location.origin);
+      sseUrl.searchParams.set('token', this.options.token);
+      if (this.options.pin) {
+        sseUrl.searchParams.set('pin', this.options.pin);
+      }
+
+      this.es = new EventSource(sseUrl.toString());
+
+      this.es.onopen = () => {
+        console.info('[WebSocketClient] SSE Stream Connected', this.getDiagnosticContext());
+        this.setState('CONNECTED');
+        this.reconnectDelay = this.options.initialReconnectDelayMs;
+      };
+
+      this.es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as WebSocketDownlinkMessage;
+          if (data.type === 'PONG') return;
+          this.lastPackets.set(data.type, data);
+          this.messageHandlers.forEach((handler) => handler(data));
+        } catch (error) {
+          console.warn('[WebSocketClient] Ignored malformed SSE payload', {
+            ...this.getDiagnosticContext(),
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      };
+
+      this.es.onerror = () => {
+        if (!this.explicitlyClosed) {
+          this.setState('RECONNECTING');
+        } else {
+          this.setState('DISCONNECTED');
+        }
+      };
+    } catch (error) {
+      console.error('[WebSocketClient] Could not create SSE stream', {
+        ...this.getDiagnosticContext(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.setState('RECONNECTING');
+      this.scheduleReconnect();
+    }
+  }
+
+  private connectWs(): void {
     try {
       this.ws = new WebSocket(this.buildWsUrl());
 
       this.ws.onopen = () => {
-        console.info('[WebSocketClient] Connected', this.getDiagnosticContext());
+        console.info('[WebSocketClient] WS Connected', this.getDiagnosticContext());
         this.setState('CONNECTED');
         this.reconnectDelay = this.options.initialReconnectDelayMs;
         this.send({ type: 'PING' });
@@ -117,13 +183,6 @@ export class WebSocketClient {
 
       this.ws.onclose = (event) => {
         this.stopHeartbeat();
-        console.warn('[WebSocketClient] Closed', {
-          ...this.getDiagnosticContext(),
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-          explicitlyClosed: this.explicitlyClosed,
-        });
         if (!this.explicitlyClosed) {
           this.setState('RECONNECTING');
           this.scheduleReconnect();
@@ -133,14 +192,14 @@ export class WebSocketClient {
       };
 
       this.ws.onerror = (event) => {
-        console.error('[WebSocketClient] Error', {
+        console.error('[WebSocketClient] WS Error', {
           ...this.getDiagnosticContext(),
           eventType: event.type,
           readyState: this.ws?.readyState,
         });
       };
     } catch (error) {
-      console.error('[WebSocketClient] Could not create connection', {
+      console.error('[WebSocketClient] Could not create WS connection', {
         ...this.getDiagnosticContext(),
         error: error instanceof Error ? error.message : String(error),
       });
@@ -150,6 +209,41 @@ export class WebSocketClient {
   }
 
   public send(message: WebSocketUplinkMessage): boolean {
+    if (this.es) {
+      if (message.type === 'DISPATCH_CHEER') {
+        const payload = {
+          token: this.options.token,
+          pin: this.options.pin,
+          ...message,
+        };
+        fetch('/api/session/cheer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+          .then(async (res) => {
+            if (res.ok) {
+              const cheerAck: WebSocketDownlinkMessage = {
+                type: 'CHEER_STATUS_UPDATE',
+                notificationId: message.notificationId,
+                status: 'ENVIADO',
+                timestamp: Date.now(),
+              } as any;
+              this.messageHandlers.forEach((h) => h(cheerAck));
+            } else {
+              console.warn('[WebSocketClient] Cheer HTTP submission rejected:', res.status);
+            }
+          })
+          .catch((err) => {
+            console.error('[WebSocketClient] Cheer HTTP network error:', err);
+          });
+        return true;
+      }
+      if (message.type === 'PING') {
+        return true;
+      }
+    }
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
       return true;
@@ -176,17 +270,13 @@ export class WebSocketClient {
   }
 
   public disconnect(): void {
-    console.warn('[WebSocketClient] Disconnect called', {
-      ...this.getDiagnosticContext(),
-      stack: new Error().stack,
-    });
     this.explicitlyClosed = true;
     this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.disposeSocket();
+    this.disposeConnection();
     this.setState('DISCONNECTED');
   }
 

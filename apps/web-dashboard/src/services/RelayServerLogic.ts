@@ -5,6 +5,7 @@ interface RoomSession {
   token: string;
   gatewayWs: WebSocket | null;
   spectators: Map<string, WebSocket>;
+  sseSpectators: Set<(payload: string) => void>;
   sessionId?: string;
   spectatorPin?: string;
   athleteName?: string;
@@ -75,6 +76,15 @@ function broadcastToSpectators(room: RoomSession, payload: string) {
   room.spectators.forEach((s) => {
     safeSend(s, payload);
   });
+  if (room.sseSpectators) {
+    room.sseSpectators.forEach((cb) => {
+      try {
+        cb(payload);
+      } catch {
+        // Safe dispatch to SSE subscriber
+      }
+    });
+  }
 }
 
 function handleGatewayRegister(ws: WebSocket, room: RoomSession, msg: any) {
@@ -141,6 +151,61 @@ function forwardCheerToGateway(room: RoomSession, msg: any) {
   }
 }
 
+function dispatchCheerCommand(
+  room: RoomSession,
+  msg: any,
+): { success: boolean; status: number; message?: string; notificationId?: string } {
+  const now = Date.now();
+  const expectedPin = (room.spectatorPin || '').trim();
+  const providedPin = (msg.spectatorPin || msg.pin || '').toString().trim();
+  const sender = (msg.senderName || '').trim() || 'Anónimo';
+
+  relayLog(
+    `📣 [RELAY] Ánimo recibido en "${room.token}" de "${sender}": "${msg.body}" (PIN recibido: "${providedPin}")`,
+  );
+
+  if (!expectedPin || providedPin !== expectedPin) {
+    relayWarn(
+      `❌ [RELAY] Ánimo rechazado en "${room.token}": PIN "${providedPin}" no coincide con "${expectedPin || 'NO REGISTRADO'}"`,
+    );
+    return {
+      success: false,
+      status: 401,
+      message: 'PIN de espectador incorrecto para esta sesión.',
+    };
+  }
+
+  const notificationId = msg.notificationId || `cheer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const forwardMsg = {
+    ...msg,
+    notificationId,
+    sessionId: msg.sessionId || room.sessionId || room.token,
+    senderName: sender,
+  };
+
+  forwardCheerToGateway(room, forwardMsg);
+
+  const cheerData = {
+    notificationId,
+    sessionId: msg.sessionId || room.sessionId || room.token,
+    senderName: sender,
+    body: (msg.body || '¡Ánimo!').substring(0, 50),
+    status: 'ENVIADO',
+    timestamp: now,
+  };
+  room.cheersHistory.set(notificationId, cheerData);
+
+  broadcastToSpectators(
+    room,
+    JSON.stringify({
+      type: 'CHEER_STATUS_UPDATE',
+      ...cheerData,
+    }),
+  );
+
+  return { success: true, status: 200, notificationId };
+}
+
 function handleDispatchCheer(
   ws: WebSocket,
   room: RoomSession,
@@ -150,42 +215,14 @@ function handleDispatchCheer(
   const now = Date.now();
   if (isLockedOut(ws, tracker, now)) return;
 
-  const expectedPin = (room.spectatorPin || '').trim();
-  const providedPin = (msg.spectatorPin || '').toString().trim();
-  const sender = msg.senderName || 'Anónimo';
-  relayLog(
-    `📣 [RELAY] Ánimo recibido en "${room.token}" de "${sender}": "${msg.body}" (PIN recibido: "${providedPin}")`,
-  );
-
-  if (!expectedPin || providedPin !== expectedPin) {
-    relayWarn(
-      `❌ [RELAY] Ánimo rechazado en "${room.token}": PIN "${providedPin}" no coincide con "${expectedPin || 'NO REGISTRADO'}"`,
-    );
+  const result = dispatchCheerCommand(room, msg);
+  if (!result.success) {
     handleInvalidPin(ws, tracker, now);
     return;
   }
 
   tracker.failedAttempts = 0;
   relayLog(`✅ [RELAY] PIN válido para sesión "${room.token}"`);
-  forwardCheerToGateway(room, msg);
-
-  const cheerData = {
-    notificationId: msg.notificationId,
-    sessionId: msg.sessionId,
-    senderName: msg.senderName || 'Espectador',
-    body: msg.body || '¡Ánimo!',
-    status: 'ENVIADO',
-    timestamp: now,
-  };
-  room.cheersHistory.set(msg.notificationId, cheerData);
-
-  broadcastToSpectators(
-    room,
-    JSON.stringify({
-      type: 'CHEER_STATUS_UPDATE',
-      ...cheerData,
-    }),
-  );
 }
 
 function appendPathHistory(room: RoomSession, coords: any) {
@@ -457,11 +494,14 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         token,
         gatewayWs: null,
         spectators: new Map(),
+        sseSpectators: new Set(),
         verbose,
         pathHistory: [],
         cheersHistory: new Map(),
       };
       rooms.set(token, room);
+    } else if (!room.sseSpectators) {
+      room.sseSpectators = new Set();
     }
     return room;
   }
@@ -519,6 +559,35 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     getPathHistory: (token: string) => {
       const room = rooms.get(token.trim().toLowerCase());
       return room ? room.pathHistory : [];
+    },
+    subscribeSseSpectator: (token: string, onPayload: (payload: string) => void) => {
+      const room = getOrCreateRoom(token);
+      room.sseSpectators.add(onPayload);
+      return () => {
+        room.sseSpectators.delete(onPayload);
+      };
+    },
+    getSpectatorBacklogMessages: (token: string) => {
+      const room = rooms.get(token.trim().toLowerCase());
+      if (!room) return [];
+      const messages: string[] = [];
+      if (room.lastTelemetry) messages.push(JSON.stringify(room.lastTelemetry));
+      if (room.lastNowPlaying) messages.push(JSON.stringify(room.lastNowPlaying));
+      if (room.lastSessionState) messages.push(JSON.stringify(room.lastSessionState));
+      if (room.cheersHistory && room.cheersHistory.size > 0) {
+        for (const cheer of room.cheersHistory.values()) {
+          messages.push(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+        }
+      }
+      return messages;
+    },
+    dispatchCheerHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = rooms.get(token);
+      if (!room) {
+        return { success: false, status: 404, message: `La sesión "${token}" no está activa.` };
+      }
+      return dispatchCheerCommand(room, data);
     },
     getAllRooms: () => {
       const result: Record<string, any> = {};
