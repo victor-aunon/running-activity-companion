@@ -343,23 +343,35 @@ function registerSpectatorConnection(
   relayLog(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
-  if (room.pathHistory.length > 0) {
-    ws.send(
-      JSON.stringify({
-        type: 'PATH_HISTORY',
-        sessionId: room.sessionId || room.token,
-        coordinates: room.pathHistory,
-      }),
-    );
-  }
-  if (room.lastTelemetry) ws.send(JSON.stringify(room.lastTelemetry));
-  if (room.lastNowPlaying) ws.send(JSON.stringify(room.lastNowPlaying));
-  if (room.lastSessionState) ws.send(JSON.stringify(room.lastSessionState));
-  if (room.cheersHistory && room.cheersHistory.size > 0) {
-    for (const cheer of room.cheersHistory.values()) {
-      ws.send(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+
+  // Defer initial state replay to next tick to allow reverse proxy (Traefik) to complete TCP Hijack
+  setTimeout(() => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    if (room.pathHistory.length > 0) {
+      ws.send(
+        JSON.stringify({
+          type: 'PATH_HISTORY',
+          sessionId: room.sessionId || room.token,
+          coordinates: room.pathHistory,
+        }),
+      );
     }
-  }
+    if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(room.lastTelemetry));
+    }
+    if (room.lastNowPlaying && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(room.lastNowPlaying));
+    }
+    if (room.lastSessionState && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(room.lastSessionState));
+    }
+    if (room.cheersHistory && room.cheersHistory.size > 0 && ws.readyState === WebSocket.OPEN) {
+      for (const cheer of room.cheersHistory.values()) {
+        ws.send(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+      }
+    }
+  }, 50);
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
