@@ -344,7 +344,10 @@ function registerSpectatorConnection(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
 
-  // Defer initial state replay to next tick to allow reverse proxy (Traefik) to complete TCP Hijack
+  // Send immediate lightweight ACK frame so reverse proxy (Traefik) transitions to full-duplex stream immediately
+  ws.send(JSON.stringify({ type: 'SPECTATOR_REGISTER_ACK', status: 'READY' }));
+
+  // Defer heavy state backlog by 50ms so proxy completes TCP stream transition before receiving large payloads
   setTimeout(() => {
     if (ws.readyState !== WebSocket.OPEN) return;
 
