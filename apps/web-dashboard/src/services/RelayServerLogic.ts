@@ -399,7 +399,11 @@ function registerSpectatorConnection(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
 
-  sendSpectatorBacklog(ws, room);
+  setTimeout(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      sendSpectatorBacklog(ws, room);
+    }
+  }, 50);
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
