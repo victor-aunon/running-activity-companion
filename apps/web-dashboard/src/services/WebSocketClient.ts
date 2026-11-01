@@ -138,7 +138,6 @@ export class WebSocketClient {
           eventType: event.type,
           readyState: this.ws?.readyState,
         });
-        this.ws?.close();
       };
     } catch (error) {
       console.error('[WebSocketClient] Could not create connection', {
@@ -177,6 +176,10 @@ export class WebSocketClient {
   }
 
   public disconnect(): void {
+    console.warn('[WebSocketClient] Disconnect called', {
+      ...this.getDiagnosticContext(),
+      stack: new Error().stack,
+    });
     this.explicitlyClosed = true;
     this.stopHeartbeat();
     if (this.reconnectTimer) {
