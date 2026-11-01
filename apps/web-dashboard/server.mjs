@@ -119,7 +119,13 @@ const server = http.createServer((req, res) => {
 
     // Keep-alive heartbeat comment every 15s to keep all intermediate proxies active
     const heartbeatTimer = setInterval(() => {
-      res.write(`: ping\n\n`);
+      if (!res.destroyed && !res.writableEnded) {
+        try {
+          res.write(`: ping\n\n`);
+        } catch {
+          // Stream already closed
+        }
+      }
     }, 15000);
 
     req.on('close', () => {
@@ -128,31 +134,46 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
-  if (parsedUrl.pathname === '/api/session/cheer' && req.method === 'POST') {
-    let rawBody = '';
-    req.on('data', (chunk) => {
-      rawBody += chunk;
-    });
-    req.on('end', () => {
-      try {
-        const payload = JSON.parse(rawBody || '{}');
-        const result = relay.dispatchCheerHttp
-          ? relay.dispatchCheerHttp(payload)
-          : { success: false, status: 500, message: 'Relay no disponible' };
-        res.writeHead(result.status || (result.success ? 200 : 400), {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        });
-        res.end(JSON.stringify(result));
-      } catch {
-        res.writeHead(400, {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        });
-        res.end(JSON.stringify({ success: false, error: 'JSON malformado' }));
-      }
-    });
-    return;
+  if (parsedUrl.pathname === '/api/session/cheer') {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      res.end();
+      return;
+    }
+    if (req.method === 'POST') {
+      let rawBody = '';
+      req.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(rawBody || '{}');
+          const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
+            .toString()
+            .split(',')[0]
+            .trim();
+          const result = relay.dispatchCheerHttp
+            ? relay.dispatchCheerHttp(payload, clientIp)
+            : { success: false, status: 500, message: 'Relay no disponible' };
+          res.writeHead(result.status || (result.success ? 200 : 400), {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.end(JSON.stringify(result));
+        } catch {
+          res.writeHead(400, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.end(JSON.stringify({ success: false, error: 'JSON malformado' }));
+        }
+      });
+      return;
+    }
   }
   void handle(req, res, parsedUrl);
 });

@@ -139,6 +139,14 @@ export class WebSocketClient {
       };
 
       this.es.onerror = () => {
+        if (this.es?.readyState === EventSource.CLOSED) {
+          this.disposeConnection();
+          if (!this.explicitlyClosed) {
+            this.setState('RECONNECTING');
+            this.scheduleReconnect();
+          }
+          return;
+        }
         if (!this.explicitlyClosed) {
           this.setState('RECONNECTING');
         } else {
@@ -231,11 +239,28 @@ export class WebSocketClient {
               } as any;
               this.messageHandlers.forEach((h) => h(cheerAck));
             } else {
-              console.warn('[WebSocketClient] Cheer HTTP submission rejected:', res.status);
+              const errData = await res.json().catch(() => ({}));
+              const errPacket: WebSocketDownlinkMessage = {
+                type: 'ERROR',
+                code:
+                  errData.code ||
+                  (res.status === 401
+                    ? 'UNAUTHORIZED_PIN'
+                    : res.status === 429
+                      ? 'PIN_RATE_LIMITED'
+                      : 'CHEER_REJECTED'),
+                message: errData.message || 'Error al enviar mensaje de ánimo',
+              } as any;
+              this.messageHandlers.forEach((h) => h(errPacket));
             }
           })
-          .catch((err) => {
-            console.error('[WebSocketClient] Cheer HTTP network error:', err);
+          .catch(() => {
+            const errPacket: WebSocketDownlinkMessage = {
+              type: 'ERROR',
+              code: 'NETWORK_ERROR',
+              message: 'Error de red al enviar mensaje de ánimo',
+            } as any;
+            this.messageHandlers.forEach((h) => h(errPacket));
           });
         return true;
       }

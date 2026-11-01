@@ -171,6 +171,38 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
     const badResult = await badCheerRes.json();
     assert.equal(badResult.success, false);
 
+    // Send 4 more incorrect attempts to trigger lockout
+    for (let i = 0; i < 4; i++) {
+      await fetch(`http://localhost:${port}/api/session/cheer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: sessionToken,
+          pin: '1234',
+          senderName: 'Test',
+          presetId: 'CLAP',
+          body: 'Bravo',
+        }),
+      });
+    }
+
+    // 6th attempt should be locked out with HTTP 429
+    const lockoutRes = await fetch(`http://localhost:${port}/api/session/cheer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: sessionToken,
+        pin: '9999', // Correct PIN, but locked out!
+        senderName: 'Test',
+        presetId: 'CLAP',
+        body: 'Bravo',
+      }),
+    });
+
+    assert.equal(lockoutRes.status, 429);
+    const lockoutResult = await lockoutRes.json();
+    assert.equal(lockoutResult.code, 'PIN_RATE_LIMITED');
+
     gw.close();
   });
 });

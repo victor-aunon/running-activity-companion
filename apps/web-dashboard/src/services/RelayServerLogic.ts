@@ -154,8 +154,19 @@ function forwardCheerToGateway(room: RoomSession, msg: any) {
 function dispatchCheerCommand(
   room: RoomSession,
   msg: any,
-): { success: boolean; status: number; message?: string; notificationId?: string } {
+  tracker?: RateLimitTracker,
+): { success: boolean; status: number; message?: string; notificationId?: string; code?: string } {
   const now = Date.now();
+  if (tracker && tracker.lockedUntil > now) {
+    const remainingSec = Math.ceil((tracker.lockedUntil - now) / 1000);
+    return {
+      success: false,
+      status: 429,
+      code: 'PIN_RATE_LIMITED',
+      message: `Demasiados intentos fallidos. Bloqueado durante ${remainingSec}s más.`,
+    };
+  }
+
   const expectedPin = (room.spectatorPin || '').trim();
   const providedPin = (msg.spectatorPin || msg.pin || '').toString().trim();
   const sender = (msg.senderName || '').trim() || 'Anónimo';
@@ -168,14 +179,35 @@ function dispatchCheerCommand(
     relayWarn(
       `❌ [RELAY] Ánimo rechazado en "${room.token}": PIN "${providedPin}" no coincide con "${expectedPin || 'NO REGISTRADO'}"`,
     );
+    if (tracker) {
+      tracker.failedAttempts += 1;
+      if (tracker.failedAttempts >= 5) {
+        tracker.lockedUntil = now + 60000;
+        relayWarn(
+          `🔒 [RELAY] Cliente bloqueado por 60s tras 5 intentos fallidos en sesión "${room.token}"`,
+        );
+        return {
+          success: false,
+          status: 429,
+          code: 'PIN_RATE_LIMITED',
+          message: 'Demasiados intentos fallidos de PIN. Bloqueado durante 60 segundos.',
+        };
+      }
+    }
     return {
       success: false,
       status: 401,
+      code: 'UNAUTHORIZED_PIN',
       message: 'PIN de espectador incorrecto para esta sesión.',
     };
   }
 
-  const notificationId = msg.notificationId || `cheer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  if (tracker) {
+    tracker.failedAttempts = 0;
+    tracker.lockedUntil = 0;
+  }
+
+  const notificationId = msg.notificationId || crypto.randomUUID();
   const forwardMsg = {
     ...msg,
     notificationId,
@@ -212,16 +244,30 @@ function handleDispatchCheer(
   tracker: RateLimitTracker,
   msg: any,
 ) {
-  const now = Date.now();
-  if (isLockedOut(ws, tracker, now)) return;
-
-  const result = dispatchCheerCommand(room, msg);
+  const result = dispatchCheerCommand(room, msg, tracker);
   if (!result.success) {
-    handleInvalidPin(ws, tracker, now);
+    if (result.code === 'PIN_RATE_LIMITED') {
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'ERROR',
+          code: 'PIN_RATE_LIMITED',
+          message: result.message || 'Demasiados intentos fallidos de PIN. Bloqueado temporalmente.',
+        }),
+      );
+    } else {
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'ERROR',
+          code: 'UNAUTHORIZED_PIN',
+          message: 'PIN de espectador incorrecto para esta sesión.',
+        }),
+      );
+    }
     return;
   }
 
-  tracker.failedAttempts = 0;
   relayLog(`✅ [RELAY] PIN válido para sesión "${room.token}"`);
 }
 
@@ -483,6 +529,7 @@ function verifyRoomPin(
 export function createRelayServer(wss: WebSocketServer, options: RelayServerOptions = {}) {
   const rooms = new Map<string, RoomSession>();
   const clientRateLimits = new WeakMap<WebSocket, RateLimitTracker>();
+  const httpRateLimits = new Map<string, RateLimitTracker>();
   isSilent = options.silent ?? (process.env.NODE_ENV === 'test');
   const verbose = options.verbose === true;
 
@@ -581,13 +628,19 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
       }
       return messages;
     },
-    dispatchCheerHttp: (data: any) => {
+    dispatchCheerHttp: (data: any, clientIdentifier?: string) => {
       const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
       const room = rooms.get(token);
       if (!room) {
         return { success: false, status: 404, message: `La sesión "${token}" no está activa.` };
       }
-      return dispatchCheerCommand(room, data);
+      const key = `${token}:${clientIdentifier || data.clientId || 'anonymous'}`;
+      let tracker = httpRateLimits.get(key);
+      if (!tracker) {
+        tracker = { failedAttempts: 0, lockedUntil: 0 };
+        httpRateLimits.set(key, tracker);
+      }
+      return dispatchCheerCommand(room, data, tracker);
     },
     getAllRooms: () => {
       const result: Record<string, any> = {};
