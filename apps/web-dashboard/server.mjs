@@ -29,6 +29,10 @@ const server = http.createServer((req, res) => {
   void handle(req, res, parsedUrl);
 });
 
+// Configure keep-alive timeouts strictly higher than reverse proxy to eliminate EOFException race conditions
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 const wss = new WebSocketServer({ noServer: true });
 const relay = createRelayServer(wss, { verbose: isVerbose });
