@@ -4,6 +4,30 @@ import next from 'next';
 import { WebSocketServer } from 'ws';
 import { createRelayServer } from './src/services/RelayServerLogic.ts';
 
+const recentLogs = [];
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+function captureLog(type, ...args) {
+  const line = `[${new Date().toISOString()}] [${type}] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`;
+  recentLogs.push(line);
+  if (recentLogs.length > 200) recentLogs.shift();
+}
+
+console.log = (...args) => {
+  captureLog('INFO', ...args);
+  originalLog(...args);
+};
+console.warn = (...args) => {
+  captureLog('WARN', ...args);
+  originalWarn(...args);
+};
+console.error = (...args) => {
+  captureLog('ERROR', ...args);
+  originalError(...args);
+};
+
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -15,6 +39,14 @@ await app.prepare();
 
 const server = http.createServer((req, res) => {
   const parsedUrl = parse(req.url || '', true);
+  if (parsedUrl.pathname === '/api/debug/logs') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(recentLogs.join('\n'));
+    return;
+  }
   if (parsedUrl.pathname === '/api/session/verify') {
     const token = parsedUrl.query.token || '';
     const pin = parsedUrl.query.pin || '';
@@ -38,15 +70,27 @@ const wss = new WebSocketServer({ noServer: true });
 const relay = createRelayServer(wss, { verbose: isVerbose });
 
 server.on('upgrade', (req, socket, head) => {
-  socket.on('error', (err) => {
-    console.warn(`⚠️ [SOCKET UPGRADE ERROR]: ${err.message}`);
-  });
   const { pathname } = parse(req.url || '');
+  console.log(
+    `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort} | upgrade=${req.headers.upgrade}`,
+  );
+
+  socket.on('error', (err) => {
+    console.warn(`⚠️ [SOCKET ERROR]: ${err.message}`);
+  });
+
+  socket.on('close', (hadError) => {
+    console.log(
+      `🔌 [TCP SOCKET CLOSED] hadError=${hadError} | bytesRead=${socket.bytesRead} | bytesWritten=${socket.bytesWritten}`,
+    );
+  });
+
   if (pathname === '/api/ws/session') {
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
     });
   } else {
+    console.warn(`🛑 [UPGRADE REJECTED] Unknown path: ${pathname}`);
     socket.destroy();
   }
 });
