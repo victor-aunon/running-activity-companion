@@ -89,6 +89,26 @@ server.on('upgrade', (req, socket, head) => {
     `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort}`,
   );
 
+  const origDestroy = socket.destroy;
+  socket.destroy = function (...args) {
+    console.log(`🛑 [SOCKET.DESTROY CALLED] Stack:\n`, new Error().stack);
+    return origDestroy.apply(this, args);
+  };
+
+  socket.on('end', () => {
+    console.log(`🛑 [SOCKET ON END] Remote peer sent TCP FIN`);
+  });
+
+  socket.on('error', (err) => {
+    console.warn(`⚠️ [SOCKET ON ERROR] ${err.message}`);
+  });
+
+  socket.on('close', (hadError) => {
+    console.log(
+      `🔌 [SOCKET ON CLOSE] hadError=${hadError} | bytesRead=${socket.bytesRead} | bytesWritten=${socket.bytesWritten}`,
+    );
+  });
+
   if (pathname === '/api/ws/session') {
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
