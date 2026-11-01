@@ -36,6 +36,16 @@ export class WebSocketClient {
   private explicitlyClosed = false;
   private lastPackets: Map<string, WebSocketDownlinkMessage> = new Map();
 
+  private getDiagnosticContext(): { role: string; clientId: string; endpoint: string } {
+    const url = new URL(this.options.url, window.location.origin.replace(/^http/, 'ws'));
+    url.search = '';
+    return {
+      role: this.options.role,
+      clientId: this.clientId,
+      endpoint: `${url.origin}${url.pathname}`,
+    };
+  }
+
   constructor(options: WebSocketClientOptions) {
     this.clientId = options.clientId || `client-${Math.random().toString(36).slice(2, 10)}`;
     this.options = {
@@ -84,6 +94,7 @@ export class WebSocketClient {
       this.ws = new WebSocket(this.buildWsUrl());
 
       this.ws.onopen = () => {
+        console.info('[WebSocketClient] Connected', this.getDiagnosticContext());
         this.setState('CONNECTED');
         this.reconnectDelay = this.options.initialReconnectDelayMs;
         this.startHeartbeat();
@@ -95,13 +106,23 @@ export class WebSocketClient {
           if (data.type === 'PONG') return;
           this.lastPackets.set(data.type, data);
           this.messageHandlers.forEach((handler) => handler(data));
-        } catch {
-          // Ignore malformed frames gracefully
+        } catch (error) {
+          console.warn('[WebSocketClient] Ignored malformed message', {
+            ...this.getDiagnosticContext(),
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
         this.stopHeartbeat();
+        console.warn('[WebSocketClient] Closed', {
+          ...this.getDiagnosticContext(),
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          explicitlyClosed: this.explicitlyClosed,
+        });
         if (!this.explicitlyClosed) {
           this.setState('RECONNECTING');
           this.scheduleReconnect();
@@ -110,10 +131,19 @@ export class WebSocketClient {
         }
       };
 
-      this.ws.onerror = () => {
+      this.ws.onerror = (event) => {
+        console.error('[WebSocketClient] Error', {
+          ...this.getDiagnosticContext(),
+          eventType: event.type,
+          readyState: this.ws?.readyState,
+        });
         this.ws?.close();
       };
-    } catch {
+    } catch (error) {
+      console.error('[WebSocketClient] Could not create connection', {
+        ...this.getDiagnosticContext(),
+        error: error instanceof Error ? error.message : String(error),
+      });
       this.setState('RECONNECTING');
       this.scheduleReconnect();
     }
