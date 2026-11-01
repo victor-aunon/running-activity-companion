@@ -86,22 +86,8 @@ const relay = createRelayServer(wss, { verbose: isVerbose });
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = parse(req.url || '');
   console.log(
-    `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort} | upgrade=${req.headers.upgrade} | headers=${JSON.stringify(req.headers)}`,
+    `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort}`,
   );
-
-  socket.on('end', () => {
-    console.log(`🛑 [TCP SOCKET END] Remote sent FIN`);
-  });
-
-  socket.on('error', (err) => {
-    console.warn(`⚠️ [SOCKET ERROR]: ${err.message}`);
-  });
-
-  socket.on('close', (hadError) => {
-    console.log(
-      `🔌 [TCP SOCKET CLOSED] hadError=${hadError} | bytesRead=${socket.bytesRead} | bytesWritten=${socket.bytesWritten}`,
-    );
-  });
 
   if (pathname === '/api/ws/session') {
     wss.handleUpgrade(req, socket, head, (ws) => {

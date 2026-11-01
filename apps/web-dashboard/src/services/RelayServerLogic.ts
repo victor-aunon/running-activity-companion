@@ -320,6 +320,9 @@ function registerGatewayConnection(ws: WebSocket, room: RoomSession, token: stri
   }
   room.gatewayWs = ws;
   relayLog(`📡 [RELAY] Pasarela Android conectada en sesión "${token}"`);
+  setImmediate(() => {
+    safeSend(ws, JSON.stringify({ type: 'GATEWAY_REGISTER_ACK', status: 'READY' }));
+  });
 }
 
 const initializedSpectators = new WeakSet<WebSocket>();
@@ -399,10 +402,10 @@ function registerSpectatorConnection(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
 
-  // Fallback: send backlog after 250ms if client hasn't sent PING yet
-  setTimeout(() => {
+  setImmediate(() => {
+    safeSend(ws, JSON.stringify({ type: 'SPECTATOR_REGISTER_ACK', status: 'READY' }));
     sendSpectatorBacklog(ws, room);
-  }, 250);
+  });
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {
