@@ -68,6 +68,16 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(result));
     return;
   }
+  if (parsedUrl.pathname === '/api/session/path') {
+    const token = (parsedUrl.query.token || '').toString();
+    const coordinates = relay.getPathHistory ? relay.getPathHistory(token) : [];
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify({ coordinates }));
+    return;
+  }
   void handle(req, res, parsedUrl);
 });
 

@@ -331,16 +331,6 @@ function sendSpectatorBacklog(ws: WebSocket, room: RoomSession) {
   try {
     if (ws.readyState !== WebSocket.OPEN) return;
 
-    if (room.pathHistory.length > 0) {
-      safeSend(
-        ws,
-        JSON.stringify({
-          type: 'PATH_HISTORY',
-          sessionId: room.sessionId || room.token,
-          coordinates: room.pathHistory,
-        }),
-      );
-    }
     if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
       safeSend(ws, JSON.stringify(room.lastTelemetry));
     }
@@ -525,6 +515,10 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         hasLastSessionState: !!room.lastSessionState,
         cheersCount: room.cheersHistory?.size || 0,
       };
+    },
+    getPathHistory: (token: string) => {
+      const room = rooms.get(token.trim().toLowerCase());
+      return room ? room.pathHistory : [];
     },
     getAllRooms: () => {
       const result: Record<string, any> = {};

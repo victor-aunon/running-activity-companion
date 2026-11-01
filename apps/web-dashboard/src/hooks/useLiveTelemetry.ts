@@ -94,6 +94,16 @@ export function useLiveTelemetry({
 
   useEffect(() => {
     if (!token) return;
+    if (typeof window !== 'undefined') {
+      fetch(`/api/session/path?token=${encodeURIComponent(token)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.coordinates && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+            state.setPathCoordinates(data.coordinates);
+          }
+        })
+        .catch(() => {});
+    }
 
     setIsUnauthorized(false);
     const url = resolveDefaultWsUrl(wsUrl);
