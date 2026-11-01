@@ -257,7 +257,8 @@ function processTypedMessage(
 ) {
   switch (msg.type) {
     case 'PING':
-      ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      safeSend(ws, JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      sendSpectatorBacklog(ws, room);
       break;
     case 'GATEWAY_REGISTER':
       handleGatewayRegister(ws, room, msg);
@@ -321,6 +322,46 @@ function registerGatewayConnection(ws: WebSocket, room: RoomSession, token: stri
   relayLog(`📡 [RELAY] Pasarela Android conectada en sesión "${token}"`);
 }
 
+const initializedSpectators = new WeakSet<WebSocket>();
+
+function sendSpectatorBacklog(ws: WebSocket, room: RoomSession) {
+  if (initializedSpectators.has(ws)) return;
+  initializedSpectators.add(ws);
+
+  try {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    if (room.pathHistory.length > 0) {
+      safeSend(
+        ws,
+        JSON.stringify({
+          type: 'PATH_HISTORY',
+          sessionId: room.sessionId || room.token,
+          coordinates: room.pathHistory,
+        }),
+      );
+    }
+    if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
+      safeSend(ws, JSON.stringify(room.lastTelemetry));
+    }
+    if (room.lastNowPlaying && ws.readyState === WebSocket.OPEN) {
+      safeSend(ws, JSON.stringify(room.lastNowPlaying));
+    }
+    if (room.lastSessionState && ws.readyState === WebSocket.OPEN) {
+      safeSend(ws, JSON.stringify(room.lastSessionState));
+    }
+    if (room.cheersHistory && room.cheersHistory.size > 0 && ws.readyState === WebSocket.OPEN) {
+      for (const cheer of room.cheersHistory.values()) {
+        safeSend(ws, JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+      }
+    }
+  } catch (err) {
+    relayWarn(
+      `⚠️ [RELAY] Error en replay de estado inicial para "${room.token}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 function registerSpectatorConnection(
   ws: WebSocket,
   room: RoomSession,
@@ -333,7 +374,8 @@ function registerSpectatorConnection(
     relayWarn(
       `🔒 [RELAY] Espectador rechazado en "${token}": PIN "${cleanPin}" incorrecto (esperado "${room.spectatorPin}")`,
     );
-    ws.send(
+    safeSend(
+      ws,
       JSON.stringify({
         type: 'ERROR',
         code: 'UNAUTHORIZED_PIN',
@@ -357,44 +399,10 @@ function registerSpectatorConnection(
     `👁️ [RELAY] Espectador conectado en sesión "${token}" (Total espectadores: ${room.spectators.size})`,
   );
 
-  // Send immediate lightweight ACK frame so reverse proxy (Traefik) transitions to full-duplex stream immediately
-  safeSend(ws, JSON.stringify({ type: 'SPECTATOR_REGISTER_ACK', status: 'READY' }));
-
-  // Defer heavy state backlog by 50ms so proxy completes TCP stream transition before receiving large payloads
+  // Fallback: send backlog after 250ms if client hasn't sent PING yet
   setTimeout(() => {
-    try {
-      if (ws.readyState !== WebSocket.OPEN) return;
-
-      if (room.pathHistory.length > 0) {
-        safeSend(
-          ws,
-          JSON.stringify({
-            type: 'PATH_HISTORY',
-            sessionId: room.sessionId || room.token,
-            coordinates: room.pathHistory,
-          }),
-        );
-      }
-      if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
-        safeSend(ws, JSON.stringify(room.lastTelemetry));
-      }
-      if (room.lastNowPlaying && ws.readyState === WebSocket.OPEN) {
-        safeSend(ws, JSON.stringify(room.lastNowPlaying));
-      }
-      if (room.lastSessionState && ws.readyState === WebSocket.OPEN) {
-        safeSend(ws, JSON.stringify(room.lastSessionState));
-      }
-      if (room.cheersHistory && room.cheersHistory.size > 0 && ws.readyState === WebSocket.OPEN) {
-        for (const cheer of room.cheersHistory.values()) {
-          safeSend(ws, JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
-        }
-      }
-    } catch (err) {
-      relayWarn(
-        `⚠️ [RELAY] Error en replay de estado inicial para "${token}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }, 50);
+    sendSpectatorBacklog(ws, room);
+  }, 250);
 }
 
 function handleSocketClose(ctx: SocketCloseContext) {

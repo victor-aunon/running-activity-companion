@@ -86,8 +86,12 @@ const relay = createRelayServer(wss, { verbose: isVerbose });
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = parse(req.url || '');
   console.log(
-    `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort} | upgrade=${req.headers.upgrade}`,
+    `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort} | upgrade=${req.headers.upgrade} | headers=${JSON.stringify(req.headers)}`,
   );
+
+  socket.on('end', () => {
+    console.log(`🛑 [TCP SOCKET END] Remote sent FIN`);
+  });
 
   socket.on('error', (err) => {
     console.warn(`⚠️ [SOCKET ERROR]: ${err.message}`);

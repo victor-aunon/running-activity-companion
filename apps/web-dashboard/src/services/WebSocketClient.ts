@@ -97,6 +97,7 @@ export class WebSocketClient {
         console.info('[WebSocketClient] Connected', this.getDiagnosticContext());
         this.setState('CONNECTED');
         this.reconnectDelay = this.options.initialReconnectDelayMs;
+        this.send({ type: 'PING' });
         this.startHeartbeat();
       };
 
