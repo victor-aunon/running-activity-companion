@@ -47,6 +47,16 @@ const server = http.createServer((req, res) => {
     res.end(recentLogs.join('\n'));
     return;
   }
+  if (parsedUrl.pathname === '/api/debug/rooms') {
+    const token = parsedUrl.query.token;
+    const data = token ? relay.getRoomDetails(token) : relay.getAllRooms();
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(JSON.stringify(data, null, 2));
+    return;
+  }
   if (parsedUrl.pathname === '/api/session/verify') {
     const token = parsedUrl.query.token || '';
     const pin = parsedUrl.query.pin || '';

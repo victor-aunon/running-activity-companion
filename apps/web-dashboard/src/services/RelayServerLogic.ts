@@ -58,9 +58,22 @@ export interface SessionVerificationResult {
   token?: string;
 }
 
+function safeSend(ws: WebSocket | null | undefined, payload: string) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    ws.send(payload, (err) => {
+      if (err) {
+        relayWarn(`⚠️ [RELAY] Error en socket send: ${err.message}`);
+      }
+    });
+  } catch (err) {
+    relayWarn(`⚠️ [RELAY] Excepción en socket send: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 function broadcastToSpectators(room: RoomSession, payload: string) {
   room.spectators.forEach((s) => {
-    if (s.readyState === WebSocket.OPEN) s.send(payload);
+    safeSend(s, payload);
   });
 }
 
@@ -119,7 +132,7 @@ function handleInvalidPin(ws: WebSocket, tracker: RateLimitTracker, now: number)
 
 function forwardCheerToGateway(room: RoomSession, msg: any) {
   if (room.gatewayWs && room.gatewayWs.readyState === WebSocket.OPEN) {
-    room.gatewayWs.send(JSON.stringify(msg));
+    safeSend(room.gatewayWs, JSON.stringify(msg));
     relayLog(`📲 [RELAY] Ánimo reenviado a la pasarela Android para el reloj`);
   } else {
     relayWarn(
@@ -345,34 +358,41 @@ function registerSpectatorConnection(
   );
 
   // Send immediate lightweight ACK frame so reverse proxy (Traefik) transitions to full-duplex stream immediately
-  ws.send(JSON.stringify({ type: 'SPECTATOR_REGISTER_ACK', status: 'READY' }));
+  safeSend(ws, JSON.stringify({ type: 'SPECTATOR_REGISTER_ACK', status: 'READY' }));
 
   // Defer heavy state backlog by 50ms so proxy completes TCP stream transition before receiving large payloads
   setTimeout(() => {
-    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      if (ws.readyState !== WebSocket.OPEN) return;
 
-    if (room.pathHistory.length > 0) {
-      ws.send(
-        JSON.stringify({
-          type: 'PATH_HISTORY',
-          sessionId: room.sessionId || room.token,
-          coordinates: room.pathHistory,
-        }),
-      );
-    }
-    if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(room.lastTelemetry));
-    }
-    if (room.lastNowPlaying && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(room.lastNowPlaying));
-    }
-    if (room.lastSessionState && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(room.lastSessionState));
-    }
-    if (room.cheersHistory && room.cheersHistory.size > 0 && ws.readyState === WebSocket.OPEN) {
-      for (const cheer of room.cheersHistory.values()) {
-        ws.send(JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+      if (room.pathHistory.length > 0) {
+        safeSend(
+          ws,
+          JSON.stringify({
+            type: 'PATH_HISTORY',
+            sessionId: room.sessionId || room.token,
+            coordinates: room.pathHistory,
+          }),
+        );
       }
+      if (room.lastTelemetry && ws.readyState === WebSocket.OPEN) {
+        safeSend(ws, JSON.stringify(room.lastTelemetry));
+      }
+      if (room.lastNowPlaying && ws.readyState === WebSocket.OPEN) {
+        safeSend(ws, JSON.stringify(room.lastNowPlaying));
+      }
+      if (room.lastSessionState && ws.readyState === WebSocket.OPEN) {
+        safeSend(ws, JSON.stringify(room.lastSessionState));
+      }
+      if (room.cheersHistory && room.cheersHistory.size > 0 && ws.readyState === WebSocket.OPEN) {
+        for (const cheer of room.cheersHistory.values()) {
+          safeSend(ws, JSON.stringify({ type: 'CHEER_STATUS_UPDATE', ...cheer }));
+        }
+      }
+    } catch (err) {
+      relayWarn(
+        `⚠️ [RELAY] Error en replay de estado inicial para "${token}": ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }, 50);
 }
@@ -483,5 +503,35 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     close: () => rooms.clear(),
     verifySession: (token: string, pin: string) =>
       verifyRoomPin(rooms.get(token.trim().toLowerCase()), token, pin),
+    getRoomDetails: (token: string) => {
+      const room = rooms.get(token.trim().toLowerCase());
+      if (!room) return null;
+      return {
+        token: room.token,
+        sessionId: room.sessionId,
+        spectatorPin: room.spectatorPin,
+        hasGateway: !!room.gatewayWs,
+        gatewayReadyState: room.gatewayWs?.readyState,
+        spectatorsCount: room.spectators.size,
+        pathHistoryLength: room.pathHistory?.length || 0,
+        hasLastTelemetry: !!room.lastTelemetry,
+        lastTelemetrySeq: room.lastTelemetry ? (room.lastTelemetry as any).seq : null,
+        hasLastNowPlaying: !!room.lastNowPlaying,
+        hasLastSessionState: !!room.lastSessionState,
+        cheersCount: room.cheersHistory?.size || 0,
+      };
+    },
+    getAllRooms: () => {
+      const result: Record<string, any> = {};
+      for (const [k, r] of rooms.entries()) {
+        result[k] = {
+          hasGateway: !!r.gatewayWs,
+          gatewayReadyState: r.gatewayWs?.readyState,
+          spectators: r.spectators.size,
+          pathLength: r.pathHistory?.length || 0,
+        };
+      }
+      return result;
+    },
   };
 }
