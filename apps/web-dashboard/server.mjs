@@ -94,6 +94,9 @@ const wss = new WebSocketServer({
 const relay = createRelayServer(wss, { verbose: isVerbose });
 
 server.on('upgrade', (req, socket, head) => {
+  socket.setTimeout(0);
+  socket.removeAllListeners('timeout');
+
   const { pathname } = parse(req.url || '');
   console.log(
     `🔍 [UPGRADE] path=${pathname} | remote=${socket.remoteAddress}:${socket.remotePort}`,
