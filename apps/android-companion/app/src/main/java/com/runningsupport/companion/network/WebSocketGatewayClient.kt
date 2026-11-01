@@ -204,9 +204,11 @@ class WebSocketGatewayClient(
         reconnectJob?.cancel()
         reconnectJob = null
         try {
-            webSocket?.cancel()
+            webSocket?.close(1000, "Session completed")
         } catch (e: Exception) {
-            // Ignore
+            try {
+                webSocket?.cancel()
+            } catch (_: Exception) {}
         }
         webSocket = null
         isConnected = false
