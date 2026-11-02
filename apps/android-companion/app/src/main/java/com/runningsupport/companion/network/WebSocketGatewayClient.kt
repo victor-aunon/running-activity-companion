@@ -15,6 +15,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class WebSocketGatewayClient(
@@ -73,19 +74,36 @@ class WebSocketGatewayClient(
                     .post(body)
                     .build()
 
-                client.newCall(req).execute().use { response ->
-                    if (response.isSuccessful) {
-                        isConnected = true
-                        _connectionError.value = null
-                        _connectionState.tryEmit(true)
-                        Log.i(TAG, "Gateway HTTP session registered: $token ($sessionId)")
-                    } else {
-                        val err = "HTTP ${response.code} ${response.message}"
-                        _connectionError.value = err
+                client.newCall(req).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        _connectionError.value = "${e.javaClass.simpleName}: ${e.message}"
                         _connectionState.tryEmit(false)
-                        Log.w(TAG, "Failed to register gateway HTTP session: $err")
+                        Log.w(TAG, "HTTP Gateway connection error: ${e.message}. Retrying in 3s...")
+                        if (shouldReconnect) {
+                            reconnectJob?.cancel()
+                            reconnectJob = scope.launch {
+                                delay(3000)
+                                if (shouldReconnect) connect()
+                            }
+                        }
                     }
-                }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        response.use { resp ->
+                            if (resp.isSuccessful) {
+                                isConnected = true
+                                _connectionError.value = null
+                                _connectionState.tryEmit(true)
+                                Log.i(TAG, "Gateway HTTP session registered: $token ($sessionId)")
+                            } else {
+                                val err = "HTTP ${resp.code} ${resp.message}"
+                                _connectionError.value = err
+                                _connectionState.tryEmit(false)
+                                Log.w(TAG, "Failed to register gateway HTTP session: $err")
+                            }
+                        }
+                    }
+                })
             } catch (e: Exception) {
                 _connectionError.value = "${e.javaClass.simpleName}: ${e.message}"
                 _connectionState.tryEmit(false)
@@ -105,6 +123,7 @@ class WebSocketGatewayClient(
         val endpoint = when (type) {
             "NOW_PLAYING_UPDATE" -> "$httpBaseUrl/api/gateway/now-playing"
             "SESSION_STATE_CHANGED" -> "$httpBaseUrl/api/gateway/session/complete"
+            "CHEER_STATUS_UPDATE" -> "$httpBaseUrl/api/gateway/cheer-ack"
             else -> "$httpBaseUrl/api/gateway/telemetry"
         }
 
@@ -115,32 +134,43 @@ class WebSocketGatewayClient(
                 .post(body)
                 .build()
 
-            client.newCall(req).execute().use { response ->
-                if (response.isSuccessful) {
-                    if (!isConnected) {
-                        isConnected = true
-                        _connectionState.tryEmit(true)
-                    }
-                    _connectionError.value = null
+            client.newCall(req).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.w(TAG, "Gateway HTTP send network error: ${e.message}")
+                }
 
-                    val respStr = response.body?.string()
-                    if (!respStr.isNullOrBlank()) {
-                        val respJson = JSONObject(respStr)
-                        val pendingCheers = respJson.optJSONArray("pendingCheers")
-                        if (pendingCheers != null && pendingCheers.length() > 0) {
-                            for (i in 0 until pendingCheers.length()) {
-                                val cheer = pendingCheers.getJSONObject(i)
-                                _incomingCheers.tryEmit(cheer)
-                                Log.i(TAG, "Incoming cheer delivered to watch: ${cheer.optString("body")}")
+                override fun onResponse(call: Call, response: Response) {
+                    response.use { resp ->
+                        if (resp.isSuccessful) {
+                            if (!isConnected) {
+                                isConnected = true
+                                _connectionState.tryEmit(true)
                             }
+                            _connectionError.value = null
+
+                            val respStr = resp.body?.string()
+                            if (!respStr.isNullOrBlank()) {
+                                try {
+                                    val respJson = JSONObject(respStr)
+                                    val pendingCheers = respJson.optJSONArray("pendingCheers")
+                                    if (pendingCheers != null && pendingCheers.length() > 0) {
+                                        for (i in 0 until pendingCheers.length()) {
+                                            val cheer = pendingCheers.getJSONObject(i)
+                                            _incomingCheers.tryEmit(cheer)
+                                            Log.i(TAG, "Incoming cheer delivered to watch: ${cheer.optString("body")}")
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error parsing gateway response: ${e.message}")
+                                }
+                            }
+                        } else {
+                            Log.w(TAG, "Gateway HTTP send error: HTTP ${resp.code}")
                         }
                     }
-                    return true
-                } else {
-                    Log.w(TAG, "Gateway HTTP send error: HTTP ${response.code}")
-                    return false
                 }
-            }
+            })
+            return true
         } catch (e: Exception) {
             Log.w(TAG, "Gateway HTTP network error: ${e.message}")
             return false
@@ -234,7 +264,10 @@ class WebSocketGatewayClient(
                     .url("$httpBaseUrl/api/gateway/session/complete")
                     .post(body)
                     .build()
-                client.newCall(req).execute().close()
+                client.newCall(req).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {}
+                    override fun onResponse(call: Call, response: Response) { response.close() }
+                })
             } catch (_: Exception) {}
         }
         isConnected = false

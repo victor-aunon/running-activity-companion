@@ -599,9 +599,9 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         token: room.token,
         sessionId: room.sessionId,
         spectatorPin: room.spectatorPin,
-        hasGateway: !!room.gatewayWs,
-        gatewayReadyState: room.gatewayWs?.readyState,
-        spectatorsCount: room.spectators.size,
+        hasGateway: !!room.gatewayWs || (room.lastTelemetry !== undefined),
+        gatewayReadyState: room.gatewayWs ? room.gatewayWs.readyState : (room.lastTelemetry ? 1 : 0),
+        spectatorsCount: room.spectators.size + (room.sseSpectators?.size || 0),
         pathHistoryLength: room.pathHistory?.length || 0,
         hasLastTelemetry: !!room.lastTelemetry,
         lastTelemetrySeq: room.lastTelemetry ? (room.lastTelemetry as any).seq : null,
@@ -692,13 +692,32 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
       broadcastToSpectators(room, JSON.stringify(msg));
       return { status: 'OK' };
     },
+    ackCheerHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = getOrCreateRoom(token);
+      const cached = room.cheersHistory?.get(data.notificationId);
+      const enriched = {
+        ...data,
+        senderName: data.senderName || cached?.senderName || 'Espectador',
+        body: data.body || cached?.body || '¡Ánimo!',
+      };
+      if (cached) {
+        cached.status = data.status || cached.status;
+        if (data.runnerReplyText) cached.runnerReplyText = data.runnerReplyText;
+      }
+      relayLog(
+        `📬 [RELAY] Estado de ánimo actualizado en "${room.token}" (HTTP): ${data.notificationId} → ${data.status}`,
+      );
+      broadcastToSpectators(room, JSON.stringify(enriched));
+      return { status: 'OK' };
+    },
     getAllRooms: () => {
       const result: Record<string, any> = {};
       for (const [k, r] of rooms.entries()) {
         result[k] = {
-          hasGateway: !!r.gatewayWs,
-          gatewayReadyState: r.gatewayWs?.readyState,
-          spectators: r.spectators.size,
+          hasGateway: !!r.gatewayWs || (r.lastTelemetry !== undefined),
+          gatewayReadyState: r.gatewayWs ? r.gatewayWs.readyState : (r.lastTelemetry ? 1 : 0),
+          spectators: r.spectators.size + (r.sseSpectators?.size || 0),
           pathLength: r.pathHistory?.length || 0,
         };
       }

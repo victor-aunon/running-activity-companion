@@ -208,6 +208,10 @@ const server = http.createServer((req, res) => {
             result = relay.completeSessionHttp
               ? relay.completeSessionHttp(payload)
               : { status: 'OK' };
+          } else if (parsedUrl.pathname === '/api/gateway/cheer-ack') {
+            result = relay.ackCheerHttp
+              ? relay.ackCheerHttp(payload)
+              : { status: 'OK' };
           }
           res.writeHead(200, {
             'Content-Type': 'application/json',
