@@ -6,6 +6,7 @@ interface RoomSession {
   gatewayWs: WebSocket | null;
   spectators: Map<string, WebSocket>;
   sseSpectators: Set<(payload: string) => void>;
+  pendingGatewayCheers: any[];
   sessionId?: string;
   spectatorPin?: string;
   athleteName?: string;
@@ -143,12 +144,16 @@ function handleInvalidPin(ws: WebSocket, tracker: RateLimitTracker, now: number)
 function forwardCheerToGateway(room: RoomSession, msg: any) {
   if (room.gatewayWs && room.gatewayWs.readyState === WebSocket.OPEN) {
     safeSend(room.gatewayWs, JSON.stringify(msg));
-    relayLog(`📲 [RELAY] Ánimo reenviado a la pasarela Android para el reloj`);
-  } else {
-    relayWarn(
-      `⚠️ [RELAY] Pasarela Android no conectada en sesión "${room.token}", ánimo no entregado`,
-    );
+    relayLog(`📲 [RELAY] Ánimo reenviado a la pasarela Android (WS) para el reloj`);
   }
+  if (!room.pendingGatewayCheers) {
+    room.pendingGatewayCheers = [];
+  }
+  room.pendingGatewayCheers.push(msg);
+  if (room.pendingGatewayCheers.length > 50) {
+    room.pendingGatewayCheers.shift();
+  }
+  relayLog(`📲 [RELAY] Ánimo encolado para pasarela Android`);
 }
 
 function dispatchCheerCommand(
@@ -542,13 +547,15 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         gatewayWs: null,
         spectators: new Map(),
         sseSpectators: new Set(),
+        pendingGatewayCheers: [],
         verbose,
         pathHistory: [],
         cheersHistory: new Map(),
       };
       rooms.set(token, room);
-    } else if (!room.sseSpectators) {
-      room.sseSpectators = new Set();
+    } else {
+      if (!room.sseSpectators) room.sseSpectators = new Set();
+      if (!room.pendingGatewayCheers) room.pendingGatewayCheers = [];
     }
     return room;
   }
@@ -641,6 +648,49 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         httpRateLimits.set(key, tracker);
       }
       return dispatchCheerCommand(room, data, tracker);
+    },
+    registerGatewayHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = getOrCreateRoom(token);
+      room.sessionId = data.sessionId || token;
+      room.spectatorPin = (data.spectatorPin || data.pin || '').toString().trim();
+      room.athleteName = data.athleteName || 'Víctor';
+      if (data.targetPaceSecPerKm && Number(data.targetPaceSecPerKm) > 0) {
+        room.targetPaceSecPerKm = Number(data.targetPaceSecPerKm);
+      }
+      if (data.totalRaceDistanceM && Number(data.totalRaceDistanceM) > 0) {
+        room.raceDistanceM = Number(data.totalRaceDistanceM);
+      }
+      const paceLog = room.targetPaceSecPerKm ? ` | Ritmo Obj: ${room.targetPaceSecPerKm}s/km` : '';
+      const distLog = room.raceDistanceM ? ` | Distancia: ${room.raceDistanceM}m` : '';
+      relayLog(
+        `🔑 [RELAY] Pasarela registrada (HTTP) → Sesión: "${room.sessionId}" | PIN: ${room.spectatorPin} | Atleta: "${room.athleteName}"${paceLog}${distLog}`,
+      );
+      return { status: 'READY', sessionId: room.sessionId };
+    },
+    ingestTelemetryHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = getOrCreateRoom(token);
+      data.type = data.type || 'TELEMETRY_SNAPSHOT';
+      handleTelemetrySnapshot(room, data);
+      const pendingCheers = room.pendingGatewayCheers ? room.pendingGatewayCheers.splice(0) : [];
+      return { status: 'OK', pendingCheers };
+    },
+    ingestNowPlayingHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = getOrCreateRoom(token);
+      data.type = data.type || 'NOW_PLAYING_UPDATE';
+      handleNowPlayingUpdate(room, data);
+      return { status: 'OK' };
+    },
+    completeSessionHttp: (data: any) => {
+      const token = (data.token || data.sessionId || '').toString().trim().toLowerCase();
+      const room = getOrCreateRoom(token);
+      const msg = { type: 'SESSION_STATE_CHANGED', status: data.status || 'COMPLETED' };
+      room.lastSessionState = msg;
+      relayLog(`🏁 [RELAY] Estado de sesión cambiado en "${room.token}" (HTTP): ${msg.status}`);
+      broadcastToSpectators(room, JSON.stringify(msg));
+      return { status: 'OK' };
     },
     getAllRooms: () => {
       const result: Record<string, any> = {};

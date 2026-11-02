@@ -175,6 +175,56 @@ const server = http.createServer((req, res) => {
       return;
     }
   }
+  if (parsedUrl.pathname.startsWith('/api/gateway/')) {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      res.end();
+      return;
+    }
+    if (req.method === 'POST') {
+      let rawBody = '';
+      req.on('data', (c) => (rawBody += c));
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(rawBody || '{}');
+          let result = { status: 'OK' };
+          if (parsedUrl.pathname === '/api/gateway/session') {
+            result = relay.registerGatewayHttp
+              ? relay.registerGatewayHttp(payload)
+              : { status: 'READY' };
+          } else if (parsedUrl.pathname === '/api/gateway/telemetry') {
+            result = relay.ingestTelemetryHttp
+              ? relay.ingestTelemetryHttp(payload)
+              : { status: 'OK', pendingCheers: [] };
+          } else if (parsedUrl.pathname === '/api/gateway/now-playing') {
+            result = relay.ingestNowPlayingHttp
+              ? relay.ingestNowPlayingHttp(payload)
+              : { status: 'OK' };
+          } else if (parsedUrl.pathname === '/api/gateway/session/complete') {
+            result = relay.completeSessionHttp
+              ? relay.completeSessionHttp(payload)
+              : { status: 'OK' };
+          }
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.end(JSON.stringify(result));
+        } catch {
+          res.writeHead(400, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          });
+          res.end(JSON.stringify({ error: 'JSON malformado' }));
+        }
+      });
+      return;
+    }
+  }
   void handle(req, res, parsedUrl);
 });
 
