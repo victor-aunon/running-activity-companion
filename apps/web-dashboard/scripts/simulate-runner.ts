@@ -14,7 +14,9 @@ function getArg(name: string, fallback?: string): string {
 const WS_PORT = parseInt(getArg('port', process.env.WS_PORT || process.env.PORT || '3001'), 10);
 const TOKEN = getArg('token', process.env.TOKEN || 'live-session');
 const PIN = getArg('pin', process.env.PIN || '4829');
-const ATHLETE_NAME = getArg('athlete') || getRequiredAthleteName();
+const ATHLETE_NAME =
+  getArg('athlete') ||
+  (process.env.NEXT_PUBLIC_ATHLETE_NAME ? getRequiredAthleteName() : 'Víctor');
 const TOTAL_RACE_DISTANCE_M = parseInt(getArg('raceDistance', '10000'), 10);
 
 const WS_URL = `ws://localhost:${WS_PORT}/api/ws/session?token=${encodeURIComponent(TOKEN)}&role=gateway`;

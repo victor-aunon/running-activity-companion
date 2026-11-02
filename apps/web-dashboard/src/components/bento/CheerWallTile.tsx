@@ -24,8 +24,8 @@ export interface CheerWallTileProps {
   onPresetSelected?: (preset: CheerPreset | null) => void;
 }
 
-function CheerItemCard({ cheer }: { cheer: CheerItem }) {
-  const fallbackReply = `${getRequiredAthleteName()} te lo agradece`;
+function CheerItemCard({ cheer, athleteName }: { cheer: CheerItem; athleteName: string }) {
+  const fallbackReply = `${athleteName} te lo agradece`;
   const timeStr = formatShortTime(cheer.timestamp);
   const statusCfg = resolveCheerStatusConfig(cheer.status);
 
@@ -55,7 +55,13 @@ function CheerItemCard({ cheer }: { cheer: CheerItem }) {
   );
 }
 
-function CheerFeed({ displayCheers }: { displayCheers: CheerItem[] }) {
+function CheerFeed({
+  displayCheers,
+  athleteName,
+}: {
+  displayCheers: CheerItem[];
+  athleteName: string;
+}) {
   if (displayCheers.length === 0) {
     return (
       <div className="border-t border-slate-100 pt-8 pb-4 flex-1 flex flex-col items-center justify-center text-center text-slate-400">
@@ -77,7 +83,7 @@ function CheerFeed({ displayCheers }: { displayCheers: CheerItem[] }) {
       </div>
       <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[280px]">
         {sortedCheers.map((c) => (
-          <CheerItemCard key={c.notificationId} cheer={c} />
+          <CheerItemCard key={c.notificationId} cheer={c} athleteName={athleteName} />
         ))}
       </div>
     </div>
@@ -286,7 +292,7 @@ export function CheerWallTile({
           selectedPresetId={selectedPresetId}
         />
       </div>
-      <CheerFeed displayCheers={cheers} />
+      <CheerFeed displayCheers={cheers} athleteName={athlete} />
     </div>
   );
 }

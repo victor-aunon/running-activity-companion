@@ -13,7 +13,9 @@ function getArg(name: string, fallback?: string): string {
 }
 
 const WS_PORT = parseInt(getArg('port', process.env.WS_PORT || process.env.PORT || '3001'), 10);
-const TOKEN = getArg('token', process.env.TOKEN || getDefaultSessionToken());
+const TOKEN =
+  getArg('token', process.env.TOKEN) ||
+  (process.env.NEXT_PUBLIC_ATHLETE_NAME ? getDefaultSessionToken() : 'carrera-victor');
 const STATE = getArg('state', 'PLAYING').toUpperCase() as PlaybackState;
 const TRACK_TITLE = getArg('title', 'The Pretender');
 const ARTIST = getArg('artist', 'Foo Fighters');

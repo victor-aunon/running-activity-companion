@@ -6,7 +6,7 @@ import type {
 import type { CheerItem } from '../types/cheer';
 import { getRequiredAthleteName } from '../utils/athlete';
 
-const MOCK_ATHLETE = getRequiredAthleteName();
+const MOCK_ATHLETE = getRequiredAthleteName(process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor');
 
 export const MOCK_STITCH_TELEMETRY: TelemetrySnapshotPacket = {
   type: 'TELEMETRY_SNAPSHOT',

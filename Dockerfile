@@ -30,6 +30,9 @@ COPY packages/shared-contracts ./packages/shared-contracts
 COPY apps/web-dashboard ./apps/web-dashboard
 
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_ATHLETE_NAME=Víctor
+ENV NEXT_PUBLIC_ATHLETE_NAME=$NEXT_PUBLIC_ATHLETE_NAME
+
 RUN pnpm --filter @running-support/shared-contracts build
 RUN pnpm --filter web-dashboard build
 
@@ -39,6 +42,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ARG NEXT_PUBLIC_ATHLETE_NAME=Víctor
+ENV NEXT_PUBLIC_ATHLETE_NAME=$NEXT_PUBLIC_ATHLETE_NAME
 
 # Create unprivileged system user for container security
 RUN addgroup --system --gid 1001 nodejs && \
