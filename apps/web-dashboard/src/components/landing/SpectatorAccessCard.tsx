@@ -7,8 +7,8 @@ import { Flame, KeyRound, ArrowRight } from 'lucide-react';
 import { requestNotificationPermissionUpfront } from '../../utils/notificationPermissions';
 import { getRequiredAthleteName, getDefaultSessionToken } from '../../utils/athlete';
 
-export function LandingHeader() {
-  const athlete = getRequiredAthleteName();
+export function LandingHeader({ athleteName }: { athleteName?: string }) {
+  const athlete = getRequiredAthleteName(athleteName);
   return (
     <div className="text-center space-y-2 mb-6">
       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100/80 text-orange-700 text-xs font-bold uppercase tracking-wider mb-2">
@@ -30,12 +30,14 @@ export function TokenInputField({
   token,
   setToken,
   disabled,
+  athleteName,
 }: {
   token: string;
   setToken: (t: string) => void;
   disabled: boolean;
+  athleteName?: string;
 }) {
-  const defaultToken = getDefaultSessionToken();
+  const defaultToken = getDefaultSessionToken(athleteName);
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -91,6 +93,7 @@ export function SessionLookupForm({
   error,
   isLoading,
   onSubmit,
+  athleteName,
 }: {
   token: string;
   setToken: (t: string) => void;
@@ -99,10 +102,16 @@ export function SessionLookupForm({
   error: string | null;
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  athleteName?: string;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <TokenInputField token={token} setToken={setToken} disabled={isLoading} />
+      <TokenInputField
+        token={token}
+        setToken={setToken}
+        disabled={isLoading}
+        athleteName={athleteName}
+      />
       <PinInputField pin={pin} setPin={setPin} disabled={isLoading} />
       {error && (
         <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
@@ -123,9 +132,9 @@ export function SessionLookupForm({
   );
 }
 
-export function useSessionVerifier() {
+export function useSessionVerifier(initialAthleteName?: string) {
   const router = useRouter();
-  const [token, setToken] = useState(getDefaultSessionToken);
+  const [token, setToken] = useState(() => getDefaultSessionToken(initialAthleteName));
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -172,12 +181,13 @@ export function useSessionVerifier() {
   return { token, setToken, pin, setPin, error, setError, isLoading, handleSubmit };
 }
 
-export function SpectatorAccessCard() {
-  const { token, setToken, pin, setPin, error, isLoading, handleSubmit } = useSessionVerifier();
+export function SpectatorAccessCard({ athleteName }: { athleteName?: string }) {
+  const { token, setToken, pin, setPin, error, isLoading, handleSubmit } =
+    useSessionVerifier(athleteName);
 
   return (
     <div className="bento-card p-6 md:p-8 shadow-xl">
-      <LandingHeader />
+      <LandingHeader athleteName={athleteName} />
       <SessionLookupForm
         token={token}
         setToken={setToken}
@@ -186,6 +196,7 @@ export function SpectatorAccessCard() {
         error={error}
         isLoading={isLoading}
         onSubmit={handleSubmit}
+        athleteName={athleteName}
       />
     </div>
   );

@@ -6,7 +6,7 @@ import {
   getDefaultSessionToken,
 } from '../../src/utils/athlete.ts';
 
-void test('Athlete utilities: Strict environment validation without fallbacks', async (t) => {
+void test('Athlete utilities: Environment validation with default fallback', async (t) => {
   await t.test('Returns explicit name when provided and valid', () => {
     assert.equal(getRequiredAthleteName('Laura', {}), 'Laura');
     assert.equal(getRequiredAthleteName('  Carlos  ', {}), 'Carlos');
@@ -17,21 +17,15 @@ void test('Athlete utilities: Strict environment validation without fallbacks', 
     assert.equal(getRequiredAthleteName(undefined, env), 'Elena');
   });
 
-  await t.test('Throws an error when NEXT_PUBLIC_ATHLETE_NAME is undefined or empty', () => {
-    assert.throws(() => getRequiredAthleteName(undefined, {}), /NEXT_PUBLIC_ATHLETE_NAME/);
-    assert.throws(
-      () => getRequiredAthleteName(undefined, { NEXT_PUBLIC_ATHLETE_NAME: '' }),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
-    assert.throws(
-      () => getRequiredAthleteName(undefined, { NEXT_PUBLIC_ATHLETE_NAME: '   ' }),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
+  await t.test('Falls back to DEFAULT_ATHLETE_NAME (Víctor) when env is undefined or empty', () => {
+    assert.equal(getRequiredAthleteName(undefined, {}), 'Víctor');
+    assert.equal(getRequiredAthleteName(undefined, { NEXT_PUBLIC_ATHLETE_NAME: '' }), 'Víctor');
+    assert.equal(getRequiredAthleteName(undefined, { NEXT_PUBLIC_ATHLETE_NAME: '   ' }), 'Víctor');
   });
 
-  await t.test('Throws an error when explicit name is empty and env is also missing', () => {
-    assert.throws(() => getRequiredAthleteName('', {}), /NEXT_PUBLIC_ATHLETE_NAME/);
-    assert.throws(() => getRequiredAthleteName('   ', {}), /NEXT_PUBLIC_ATHLETE_NAME/);
+  await t.test('Falls back to DEFAULT_ATHLETE_NAME when explicit name is empty and env is missing', () => {
+    assert.equal(getRequiredAthleteName('', {}), 'Víctor');
+    assert.equal(getRequiredAthleteName('   ', {}), 'Víctor');
   });
 
   await t.test('getAthleteSlug sanitizes accents and special characters properly', () => {
@@ -40,14 +34,11 @@ void test('Athlete utilities: Strict environment validation without fallbacks', 
     assert.equal(getAthleteSlug("Álvaro O'Donnell"), 'alvaro-o-donnell');
   });
 
-  await t.test(
-    'getDefaultSessionToken constructs slugged token or throws if env is missing',
-    () => {
-      assert.equal(
-        getDefaultSessionToken(undefined, { NEXT_PUBLIC_ATHLETE_NAME: 'Ana García' }),
-        'carrera-ana-garcia',
-      );
-      assert.throws(() => getDefaultSessionToken(undefined, {}), /NEXT_PUBLIC_ATHLETE_NAME/);
-    },
-  );
+  await t.test('getDefaultSessionToken constructs slugged token with fallback', () => {
+    assert.equal(
+      getDefaultSessionToken(undefined, { NEXT_PUBLIC_ATHLETE_NAME: 'Ana García' }),
+      'carrera-ana-garcia',
+    );
+    assert.equal(getDefaultSessionToken(undefined, {}), 'carrera-victor');
+  });
 });

@@ -1,20 +1,19 @@
 /**
- * Utilería para resolución y validación estricta del nombre del atleta.
- * Falla de inmediato (Fail-Fast) si NEXT_PUBLIC_ATHLETE_NAME no está configurada,
- * evitando fallbacks estáticos silenciosos.
+ * Utilería para resolución del nombre del atleta.
+ * Soporta parametrización explícita, variable de entorno NEXT_PUBLIC_ATHLETE_NAME
+ * y fallback estándar a 'Víctor' según FR-008.
  */
+
+export const DEFAULT_ATHLETE_NAME = 'Víctor';
 
 export function getRequiredAthleteName(
   explicitName?: string,
-  env: Record<string, string | undefined> = process.env,
+  env?: Record<string, string | undefined>,
 ): string {
-  const candidate = explicitName?.trim() || env.NEXT_PUBLIC_ATHLETE_NAME?.trim();
-  if (!candidate) {
-    throw new Error(
-      'La variable de entorno NEXT_PUBLIC_ATHLETE_NAME no está definida y no se proporcionó ningún nombre de atleta.',
-    );
-  }
-  return candidate;
+  const envVal =
+    env !== undefined ? env.NEXT_PUBLIC_ATHLETE_NAME : process.env.NEXT_PUBLIC_ATHLETE_NAME;
+  const candidate = explicitName?.trim() || envVal?.trim();
+  return candidate || DEFAULT_ATHLETE_NAME;
 }
 
 export function getAthleteSlug(name: string): string {
@@ -29,7 +28,7 @@ export function getAthleteSlug(name: string): string {
 
 export function getDefaultSessionToken(
   explicitName?: string,
-  env: Record<string, string | undefined> = process.env,
+  env?: Record<string, string | undefined>,
 ): string {
   const athlete = getRequiredAthleteName(explicitName, env);
   const slug = getAthleteSlug(athlete);

@@ -96,8 +96,11 @@ export function resolveInitialNowPlaying(
   return mockFixture?.nowPlaying ?? null;
 }
 
-export function resolveAthleteName(mockFixture: ReturnType<typeof getInitialFixture>): string {
-  return getRequiredAthleteName(mockFixture?.config?.athleteName);
+export function resolveAthleteName(
+  mockFixture: ReturnType<typeof getInitialFixture>,
+  explicitAthleteName?: string,
+): string {
+  return getRequiredAthleteName(mockFixture?.config?.athleteName || explicitAthleteName);
 }
 
 function useDashboardEtaAndLocality(
@@ -150,11 +153,11 @@ function useSessionClientAndState(
   };
 }
 
-export function useDashboardSession(token: string) {
+export function useDashboardSession(token: string, explicitAthleteName?: string) {
   const searchParams = useSearchParams();
   const mockFixture = getInitialFixture(searchParams);
   const init = resolveInnerDashboardParams(mockFixture, searchParams.get('pin'));
-  const athlete = resolveAthleteName(mockFixture);
+  const athlete = resolveAthleteName(mockFixture, explicitAthleteName);
   const {
     telemetry,
     spectator,

@@ -5,8 +5,14 @@ import { useDashboardSession } from '../../hooks/useDashboardSession';
 import { UnauthorizedAccessCard } from './UnauthorizedAccessCard';
 import { DashboardLayout } from './DashboardLayout';
 
-export function SessionDashboardInner({ token }: { token: string }) {
-  const session = useDashboardSession(token);
+export function SessionDashboardInner({
+  token,
+  athleteName,
+}: {
+  token: string;
+  athleteName?: string;
+}) {
+  const session = useDashboardSession(token, athleteName);
   const onRefresh = session.client
     ? () => {
         session.client?.disconnect();
