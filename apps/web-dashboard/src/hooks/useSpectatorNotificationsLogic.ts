@@ -100,7 +100,19 @@ export function parsePositiveNumber(val: unknown, fallback: number): number {
 }
 
 export function parseNotificationThresholds(
-  env: Record<string, string | undefined> = {},
+  env: Record<string, string | undefined> = {
+    NEXT_PUBLIC_ZONE_4_MAX: process.env.NEXT_PUBLIC_ZONE_4_MAX,
+    NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM: process.env.NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM,
+    NEXT_PUBLIC_NOTIF_EXERTION_COOLDOWN_SEC: process.env.NEXT_PUBLIC_NOTIF_EXERTION_COOLDOWN_SEC,
+    NEXT_PUBLIC_NOTIF_EXERTION_MAX_CONSECUTIVE:
+      process.env.NEXT_PUBLIC_NOTIF_EXERTION_MAX_CONSECUTIVE,
+    NEXT_PUBLIC_NOTIF_SPRINT_HR_BPM: process.env.NEXT_PUBLIC_NOTIF_SPRINT_HR_BPM,
+    NEXT_PUBLIC_NOTIF_SPRINT_CADENCE_SPM: process.env.NEXT_PUBLIC_NOTIF_SPRINT_CADENCE_SPM,
+    NEXT_PUBLIC_NOTIF_SPRINT_FINAL_DISTANCE_M:
+      process.env.NEXT_PUBLIC_NOTIF_SPRINT_FINAL_DISTANCE_M,
+    NEXT_PUBLIC_NOTIF_SPRINT_COOLDOWN_SEC: process.env.NEXT_PUBLIC_NOTIF_SPRINT_COOLDOWN_SEC,
+    NEXT_PUBLIC_NOTIF_SPRINT_MAX_CONSECUTIVE: process.env.NEXT_PUBLIC_NOTIF_SPRINT_MAX_CONSECUTIVE,
+  },
 ): NotificationThresholdsConfig {
   const zone4Max = parsePositiveNumber(env.NEXT_PUBLIC_ZONE_4_MAX, 175);
   const defaultExertionHr = parsePositiveNumber(env.NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM, zone4Max);

@@ -133,7 +133,11 @@ export const DEFAULT_CADENCE_ZONES: CadenceZoneConfig = {
 };
 
 export function parseCadenceZones(
-  env: Record<string, string | undefined> = typeof process !== 'undefined' ? process.env : {},
+  env: Record<string, string | undefined> = {
+    NEXT_PUBLIC_CADENCE_LOW_MAX: process.env.NEXT_PUBLIC_CADENCE_LOW_MAX,
+    NEXT_PUBLIC_CADENCE_MODERATE_MAX: process.env.NEXT_PUBLIC_CADENCE_MODERATE_MAX,
+    NEXT_PUBLIC_CADENCE_OPTIMAL_MAX: process.env.NEXT_PUBLIC_CADENCE_OPTIMAL_MAX,
+  },
 ): CadenceZoneConfig {
   const low = Number(env.NEXT_PUBLIC_CADENCE_LOW_MAX);
   const mod = Number(env.NEXT_PUBLIC_CADENCE_MODERATE_MAX);

@@ -18,7 +18,9 @@ function isMonotonicSequence(values: number[]): boolean {
 }
 
 export function resolveMaxHeartRate(
-  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+  env: Record<string, string | undefined> = {
+    NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX,
+  },
   config: EffortZoneConfig = DEFAULT_EFFORT_ZONES,
 ): number {
   const envVal = Number(env.NEXT_PUBLIC_ZONE_5_MAX);
@@ -28,7 +30,15 @@ export function resolveMaxHeartRate(
   return config.zone5Max || DEFAULT_EFFORT_ZONES.zone5Max;
 }
 
-export function parseEffortZones(env: Record<string, string | undefined>): EffortZoneConfig {
+export function parseEffortZones(
+  env: Record<string, string | undefined> = {
+    NEXT_PUBLIC_ZONE_1_MAX: process.env.NEXT_PUBLIC_ZONE_1_MAX,
+    NEXT_PUBLIC_ZONE_2_MAX: process.env.NEXT_PUBLIC_ZONE_2_MAX,
+    NEXT_PUBLIC_ZONE_3_MAX: process.env.NEXT_PUBLIC_ZONE_3_MAX,
+    NEXT_PUBLIC_ZONE_4_MAX: process.env.NEXT_PUBLIC_ZONE_4_MAX,
+    NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX,
+  },
+): EffortZoneConfig {
   const zones = [
     Number(env.NEXT_PUBLIC_ZONE_1_MAX),
     Number(env.NEXT_PUBLIC_ZONE_2_MAX),
@@ -91,11 +101,20 @@ export function resolveHeartRateZone(
 
 export function useEffortZones() {
   const config = useMemo(() => {
-    return parseEffortZones(process.env as Record<string, string | undefined>);
+    return parseEffortZones({
+      NEXT_PUBLIC_ZONE_1_MAX: process.env.NEXT_PUBLIC_ZONE_1_MAX,
+      NEXT_PUBLIC_ZONE_2_MAX: process.env.NEXT_PUBLIC_ZONE_2_MAX,
+      NEXT_PUBLIC_ZONE_3_MAX: process.env.NEXT_PUBLIC_ZONE_3_MAX,
+      NEXT_PUBLIC_ZONE_4_MAX: process.env.NEXT_PUBLIC_ZONE_4_MAX,
+      NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX,
+    });
   }, []);
 
   const maxHeartRateBpm = useMemo(() => {
-    return resolveMaxHeartRate(process.env as Record<string, string | undefined>, config);
+    return resolveMaxHeartRate(
+      { NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX },
+      config,
+    );
   }, [config]);
 
   return {

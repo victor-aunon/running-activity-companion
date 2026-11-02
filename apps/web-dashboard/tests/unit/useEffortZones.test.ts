@@ -74,4 +74,60 @@ void test('useEffortZones Unit Tests: Environment parsing and zone resolution', 
     assert.equal(resolveHeartRateZone(185, config).zone, 5);
     assert.equal(resolveHeartRateZone(210, config).zone, 5);
   });
+
+  await t.test(
+    'Resolves user custom zones correctly (113, 132, 152, 173, 193) where 155 bpm is Zone 4',
+    () => {
+      const userEnv = {
+        NEXT_PUBLIC_ZONE_1_MAX: '113',
+        NEXT_PUBLIC_ZONE_2_MAX: '132',
+        NEXT_PUBLIC_ZONE_3_MAX: '152',
+        NEXT_PUBLIC_ZONE_4_MAX: '173',
+        NEXT_PUBLIC_ZONE_5_MAX: '193',
+      };
+      const config = parseEffortZones(userEnv);
+      assert.deepEqual(config, {
+        zone1Max: 113,
+        zone2Max: 132,
+        zone3Max: 152,
+        zone4Max: 173,
+        zone5Max: 193,
+      });
+
+      const zoneInfo = resolveHeartRateZone(155, config);
+      assert.equal(zoneInfo.zone, 4);
+      assert.equal(zoneInfo.name, 'Zona 4 (Umbral)');
+
+      const maxHr = resolveMaxHeartRate(userEnv, config);
+      assert.equal(maxHr, 193);
+    },
+  );
+
+  await t.test(
+    'parseEffortZones and resolveMaxHeartRate default parameters read process.env without arguments',
+    () => {
+      const originalEnv = { ...process.env };
+      try {
+        process.env.NEXT_PUBLIC_ZONE_1_MAX = '113';
+        process.env.NEXT_PUBLIC_ZONE_2_MAX = '132';
+        process.env.NEXT_PUBLIC_ZONE_3_MAX = '152';
+        process.env.NEXT_PUBLIC_ZONE_4_MAX = '173';
+        process.env.NEXT_PUBLIC_ZONE_5_MAX = '193';
+
+        const config = parseEffortZones();
+        assert.deepEqual(config, {
+          zone1Max: 113,
+          zone2Max: 132,
+          zone3Max: 152,
+          zone4Max: 173,
+          zone5Max: 193,
+        });
+
+        const maxHr = resolveMaxHeartRate();
+        assert.equal(maxHr, 193);
+      } finally {
+        process.env = originalEnv;
+      }
+    },
+  );
 });

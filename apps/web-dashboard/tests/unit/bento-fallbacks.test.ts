@@ -135,6 +135,17 @@ void test('Bento Cadence and Navigation Helpers Unit Tests', async (t) => {
         NEXT_PUBLIC_CADENCE_OPTIMAL_MAX: '180',
       });
       assert.deepEqual(fallback, { lowMax: 155, moderateMax: 169, optimalMax: 185 });
+
+      const originalEnv = { ...process.env };
+      try {
+        process.env.NEXT_PUBLIC_CADENCE_LOW_MAX = '148';
+        process.env.NEXT_PUBLIC_CADENCE_MODERATE_MAX = '162';
+        process.env.NEXT_PUBLIC_CADENCE_OPTIMAL_MAX = '179';
+        const fromEnv = parseCadenceZones();
+        assert.deepEqual(fromEnv, { lowMax: 148, moderateMax: 162, optimalMax: 179 });
+      } finally {
+        process.env = originalEnv;
+      }
     },
   );
 

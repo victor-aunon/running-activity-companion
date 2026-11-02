@@ -67,6 +67,24 @@ void test('useSpectatorNotifications: Notification thresholds environment parsin
       assert.equal(config.exertion.hrThresholdBpm, 172);
     },
   );
+
+  await t.test(
+    'parseNotificationThresholds default parameters read process.env without arguments',
+    () => {
+      const originalEnv = { ...process.env };
+      try {
+        process.env.NEXT_PUBLIC_ZONE_4_MAX = '173';
+        process.env.NEXT_PUBLIC_NOTIF_EXERTION_HR_BPM = '170';
+        process.env.NEXT_PUBLIC_NOTIF_SPRINT_HR_BPM = '174';
+
+        const config = parseNotificationThresholds();
+        assert.equal(config.exertion.hrThresholdBpm, 170);
+        assert.equal(config.sprint.hrThresholdBpm, 174);
+      } finally {
+        process.env = originalEnv;
+      }
+    },
+  );
 });
 
 void test('useSpectatorNotifications: Effective distance resolution', async (t) => {
