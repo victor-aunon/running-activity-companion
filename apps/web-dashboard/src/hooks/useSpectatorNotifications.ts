@@ -16,6 +16,7 @@ import {
 } from './useSpectatorNotificationsLogic';
 import { executeCtaScrollAndPreset } from '../components/ui/NotificationSnackbarLogic';
 import { playNotificationSound } from '../utils/notificationAudio';
+import { getRequiredAthleteName } from '../utils/athlete';
 
 export interface UseSpectatorNotificationsOptions {
   telemetry: TelemetrySnapshotPacket | null;
@@ -65,11 +66,12 @@ function useActiveThresholds(
 
 export function useSpectatorNotifications({
   telemetry,
-  athleteName = 'Víctor',
+  athleteName,
   thresholds,
   hrExertionThreshold,
   onSelectPreset,
 }: UseSpectatorNotificationsOptions) {
+  const resolvedAthlete = getRequiredAthleteName(athleteName);
   const [snackbars, setSnackbars] = useState<SpectatorNotification[]>([]);
   const engineRef = useRef<NotificationEngineState>({
     ...INITIAL_NOTIFICATION_ENGINE_STATE,
@@ -96,7 +98,7 @@ export function useSpectatorNotifications({
       engineRef.current,
       activeThresholds,
       {
-        athleteName,
+        athleteName: resolvedAthlete,
         now: Date.now(),
         envDefaultRaceDistance: process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
       },
@@ -109,7 +111,7 @@ export function useSpectatorNotifications({
         playNotificationSound(alert.type);
       });
     }
-  }, [telemetry, athleteName, activeThresholds]);
+  }, [telemetry, resolvedAthlete, activeThresholds]);
 
   return { snackbars, dismissSnackbar, handleCtaClick };
 }

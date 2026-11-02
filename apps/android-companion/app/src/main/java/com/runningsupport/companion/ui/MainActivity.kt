@@ -32,11 +32,11 @@ class SessionManager(private val context: Context) {
     private var currentSession: ActiveSessionState? = null
 
     fun getOrCreateSession(
-        customToken: String = "carrera-victor",
+        customToken: String = MainActivity.DEFAULT_SESSION_NAME,
         customPin: String = "4829"
     ): ActiveSessionState {
         val last = currentSession
-        val tokenToUse = customToken.trim().ifEmpty { "carrera-victor" }
+        val tokenToUse = customToken.trim().ifEmpty { MainActivity.DEFAULT_SESSION_NAME }
         val pinToUse = customPin.trim().ifEmpty { "4829" }
 
         if (last != null && last.token == tokenToUse && last.spectatorPin == pinToUse) {
@@ -90,9 +90,15 @@ class MainActivity : ComponentActivity() {
 
             var pendingBufferCount by remember { mutableStateOf(0) }
 
+            var athleteName by remember {
+                mutableStateOf(
+                    prefs.getString(KEY_ATHLETE_NAME, DEFAULT_ATHLETE_NAME) ?: DEFAULT_ATHLETE_NAME
+                )
+            }
+
             var sessionName by remember {
                 mutableStateOf(
-                    prefs.getString(KEY_SESSION_NAME, "carrera-victor") ?: "carrera-victor"
+                    prefs.getString(KEY_SESSION_NAME, DEFAULT_SESSION_NAME) ?: DEFAULT_SESSION_NAME
                 )
             }
 
@@ -151,6 +157,11 @@ class MainActivity : ComponentActivity() {
                 isSimulationMode = isSimulationMode,
                 pendingBufferCount = pendingBufferCount,
                 spectatorPin = spectatorPin,
+                athleteName = athleteName,
+                onAthleteNameChange = { newAthlete ->
+                    athleteName = newAthlete
+                    prefs.edit().putString(KEY_ATHLETE_NAME, newAthlete).apply()
+                },
                 sessionName = sessionName,
                 serverUrl = serverUrl,
                 garminDiagnostics = garminDiagnostics,
@@ -162,6 +173,7 @@ class MainActivity : ComponentActivity() {
                 onSendTestNotification = {
                     val activeSessionId = session?.sessionId ?: sessionName
                     val testId = "test-${System.currentTimeMillis()}"
+                    val athlete = athleteName.trim().ifEmpty { DEFAULT_ATHLETE_NAME }
                     coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             db.cheerDao().insertCheer(
@@ -170,7 +182,7 @@ class MainActivity : ComponentActivity() {
                                     sessionId = activeSessionId,
                                     senderName = "Espectador de Prueba",
                                     presetId = "MUCHO_ANIMO",
-                                    body = "¡Mucho ánimo Víctor! Ya estás volando hacia meta",
+                                    body = "¡Mucho ánimo $athlete! Ya estás volando hacia meta",
                                     status = "EN_RELOJ",
                                     runnerReplyText = null,
                                     receivedAt = System.currentTimeMillis(),
@@ -181,7 +193,11 @@ class MainActivity : ComponentActivity() {
                             Log.e("MainActivity", "Error guardando test cheer en Room: ${e.message}")
                         }
                     }
-                    val msg = RunningActivityService.sendTestCheerNotification(this@MainActivity, activeSessionId)
+                    val msg = RunningActivityService.sendTestCheerNotification(
+                        this@MainActivity,
+                        activeSessionId,
+                        athlete
+                    )
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                 },
                 onExportHtml = {
@@ -231,14 +247,14 @@ class MainActivity : ComponentActivity() {
                 onToggleSimulationMode = { enabled ->
                     isSimulationMode = enabled
                     if (isServiceRunning) {
-                        startTrackingService(session, serverUrl, enabled, targetPace, targetDistanceKm)
+                        startTrackingService(session, serverUrl, enabled, targetPace, targetDistanceKm, athleteName)
                     }
                 },
                 onToggleService = { enabled ->
                     if (enabled) {
                         val activeSession = sessionManager.getOrCreateSession(sessionName, spectatorPin)
                         session = activeSession
-                        startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace, targetDistanceKm)
+                        startTrackingService(activeSession, serverUrl, isSimulationMode, targetPace, targetDistanceKm, athleteName)
                     } else {
                         val sId = session?.sessionId ?: sessionName
                         coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -325,7 +341,8 @@ class MainActivity : ComponentActivity() {
         serverUrl: String,
         isSimulation: Boolean,
         targetPaceStr: String,
-        targetDistanceKmStr: String
+        targetDistanceKmStr: String,
+        athleteName: String
     ) {
         try {
             val resolvedUrl = sanitizeServerUrl(serverUrl)
@@ -339,6 +356,7 @@ class MainActivity : ComponentActivity() {
                 putExtra(RunningActivityService.EXTRA_SIMULATION_MODE, isSimulation)
                 putExtra(RunningActivityService.EXTRA_TARGET_PACE_SEC, targetPaceSec)
                 putExtra(RunningActivityService.EXTRA_TOTAL_RACE_DISTANCE_M, targetDistanceM)
+                putExtra(RunningActivityService.EXTRA_ATHLETE_NAME, athleteName.trim().ifEmpty { DEFAULT_ATHLETE_NAME })
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
@@ -362,7 +380,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val PREFS_NAME = "gateway_prefs"
         const val KEY_SERVER_URL = "server_url"
+        const val KEY_ATHLETE_NAME = "athlete_name"
+        const val DEFAULT_ATHLETE_NAME = "Corredor"
         const val KEY_SESSION_NAME = "session_name"
+        const val DEFAULT_SESSION_NAME = "carrera-live"
         const val KEY_SPECTATOR_PIN = "spectator_pin"
         const val KEY_TARGET_PACE = "target_pace"
         const val DEFAULT_TARGET_PACE = "4:30"

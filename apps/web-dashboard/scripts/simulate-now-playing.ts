@@ -1,17 +1,19 @@
 import { WebSocket } from 'ws';
 import type { NowPlayingUpdatePacket, PlaybackState } from '@running-support/shared-contracts';
+import { getDefaultSessionToken } from '../src/utils/athlete.ts';
 
 const args = process.argv.slice(2);
-function getArg(name: string, fallback: string): string {
+function getArg(name: string, fallback?: string): string {
   const arg = args.find((a) => a.startsWith(`--${name}=`));
   if (arg) return arg.split('=')[1];
   const idx = args.indexOf(`--${name}`);
   if (idx !== -1 && args[idx + 1]) return args[idx + 1];
-  return fallback;
+  if (fallback !== undefined) return fallback;
+  return '';
 }
 
 const WS_PORT = parseInt(getArg('port', process.env.WS_PORT || process.env.PORT || '3001'), 10);
-const TOKEN = getArg('token', process.env.TOKEN || 'carrera-victor');
+const TOKEN = getArg('token', process.env.TOKEN || getDefaultSessionToken());
 const STATE = getArg('state', 'PLAYING').toUpperCase() as PlaybackState;
 const TRACK_TITLE = getArg('title', 'The Pretender');
 const ARTIST = getArg('artist', 'Foo Fighters');

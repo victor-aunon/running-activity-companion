@@ -57,4 +57,27 @@ class SessionExportModelsTest {
         assertEquals("--:--", summary.formattedPace)
         assertEquals("00:00:00", summary.formattedDuration)
     }
+
+    @Test
+    fun testTimelineCheer_FormattedElapsedFormat() {
+        val cheerUnderHour = TimelineCheer(
+            senderName = "Marta",
+            body = "¡Fuerza!",
+            status = "AGRADECIDO",
+            receivedAt = 1000L,
+            kmMark = 2.0,
+            elapsedSeconds = 875L // 14 min 35 sec
+        )
+        assertEquals("14:35", cheerUnderHour.formattedElapsed)
+
+        val cheerOverHour = TimelineCheer(
+            senderName = "Marta",
+            body = "¡Sprint final!",
+            status = "EXPIRADO",
+            receivedAt = 1000L,
+            kmMark = 18.0,
+            elapsedSeconds = 3905L // 1h 05 min 05 sec
+        )
+        assertEquals("01:05:05", cheerOverHour.formattedElapsed)
+    }
 }

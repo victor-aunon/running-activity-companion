@@ -17,6 +17,17 @@ function isMonotonicSequence(values: number[]): boolean {
   return true;
 }
 
+export function resolveMaxHeartRate(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+  config: EffortZoneConfig = DEFAULT_EFFORT_ZONES,
+): number {
+  const envVal = Number(env.NEXT_PUBLIC_ZONE_5_MAX);
+  if (!isNaN(envVal) && envVal > 0) {
+    return envVal;
+  }
+  return config.zone5Max || DEFAULT_EFFORT_ZONES.zone5Max;
+}
+
 export function parseEffortZones(env: Record<string, string | undefined>): EffortZoneConfig {
   const zones = [
     Number(env.NEXT_PUBLIC_ZONE_1_MAX),
@@ -83,8 +94,13 @@ export function useEffortZones() {
     return parseEffortZones(process.env as Record<string, string | undefined>);
   }, []);
 
+  const maxHeartRateBpm = useMemo(() => {
+    return resolveMaxHeartRate(process.env as Record<string, string | undefined>, config);
+  }, [config]);
+
   return {
     config,
+    maxHeartRateBpm,
     resolveZone: (bpm: number) => resolveHeartRateZone(bpm, config),
   };
 }

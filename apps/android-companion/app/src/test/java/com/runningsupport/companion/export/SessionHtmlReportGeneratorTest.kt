@@ -155,4 +155,37 @@ class SessionHtmlReportGeneratorTest {
         assertFalse(html.contains("Agradecido"))
         assertFalse(html.contains("te lo agradece"))
     }
+
+    @Test
+    fun testGenerateHtml_ExpiredCheer_DoesNotShowExpiradoBadge() {
+        val summary = SessionSummaryData(
+            sessionId = "expired-cheer",
+            athleteName = "Corredor",
+            status = "COMPLETED",
+            startedAt = 1000L,
+            endedAt = 2000L,
+            totalDistanceM = 5000.0,
+            elapsedSeconds = 1500L,
+            startGps = null,
+            endGps = null,
+            cheers = listOf(
+                TimelineCheer(
+                    senderName = "Carlos",
+                    body = "¡Fuerza!",
+                    status = "EXPIRADO",
+                    runnerReplyText = null,
+                    receivedAt = 1500L,
+                    kmMark = 2.5,
+                    elapsedSeconds = 750L
+                )
+            )
+        )
+
+        val html = SessionHtmlReportGenerator.generateHtml(summary)
+
+        assertFalse(html.contains("Expirado"))
+        assertFalse(html.contains("badge-expired"))
+        assertFalse(html.contains("Agradecido"))
+        assertTrue(html.contains("Minuto 12:30"))
+    }
 }

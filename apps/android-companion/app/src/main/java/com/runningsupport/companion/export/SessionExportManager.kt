@@ -47,7 +47,18 @@ class SessionExportManager(
             .ifEmpty { cheerDao.getAllRecentCheers() }
             .sortedBy { it.receivedAt }
 
+        val firstTelemetry = allTelemetry.firstOrNull()
         val lastTelemetry = allTelemetry.lastOrNull()
+        val firstTelemetryTime = firstTelemetry?.timestamp
+
+        val raceStartTime = when {
+            firstTelemetryTime != null && session.startedAt > 0 -> minOf(session.startedAt, firstTelemetryTime)
+            firstTelemetryTime != null -> firstTelemetryTime
+            session.startedAt > 0 -> session.startedAt
+            rawCheers.isNotEmpty() -> rawCheers.first().receivedAt
+            else -> System.currentTimeMillis()
+        }
+
         val effectiveDistanceM = if (session.totalDistanceM > 0.0) {
             session.totalDistanceM
         } else {
@@ -55,8 +66,10 @@ class SessionExportManager(
         }
         val effectiveElapsedSeconds = if (session.elapsedSeconds > 0) {
             session.elapsedSeconds
+        } else if (firstTelemetry != null && lastTelemetry != null && lastTelemetry.timestamp >= firstTelemetry.timestamp) {
+            ((lastTelemetry.timestamp - firstTelemetry.timestamp) / 1000L).coerceAtLeast(0L)
         } else {
-            ((System.currentTimeMillis() - session.startedAt) / 1000L).coerceAtLeast(0L)
+            ((System.currentTimeMillis() - raceStartTime) / 1000L).coerceAtLeast(0L)
         }
 
         val timelineCheers = rawCheers.map { cheer ->
@@ -64,13 +77,21 @@ class SessionExportManager(
             val kmMark = if (closestTelemetry != null && closestTelemetry.distanceM > 0) {
                 closestTelemetry.distanceM / 1000.0
             } else if (effectiveDistanceM > 0 && effectiveElapsedSeconds > 0) {
-                val elapsedFrac = (cheer.receivedAt - session.startedAt).coerceAtLeast(0) / 1000.0
+                val elapsedFrac = (cheer.receivedAt - raceStartTime).coerceAtLeast(0) / 1000.0
                 (elapsedFrac * (effectiveDistanceM / effectiveElapsedSeconds)) / 1000.0
             } else {
                 0.0
             }
 
-            val elapsedSec = ((cheer.receivedAt - session.startedAt) / 1000L).coerceAtLeast(0L)
+            val elapsedSec = when {
+                closestTelemetry != null && firstTelemetryTime != null && closestTelemetry.timestamp >= firstTelemetryTime -> {
+                    (closestTelemetry.timestamp - firstTelemetryTime) / 1000L
+                }
+                cheer.receivedAt >= raceStartTime -> {
+                    (cheer.receivedAt - raceStartTime) / 1000L
+                }
+                else -> 0L
+            }
 
             TimelineCheer(
                 senderName = cheer.senderName,

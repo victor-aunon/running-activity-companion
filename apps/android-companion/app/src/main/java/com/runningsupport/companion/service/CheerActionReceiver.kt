@@ -29,22 +29,27 @@ class CheerActionReceiver : BroadcastReceiver() {
             val db = AppDatabase.getDatabase(context)
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    db.cheerDao().updateStatus(notifId, "AGRADECIDO", "Víctor te lo agradece")
+                    val session = db.telemetryBufferDao().getSession(sessionId)
+                        ?: db.telemetryBufferDao().getLatestSession()
+                    val athlete = session?.athleteName?.trim()?.ifEmpty { null } ?: "El corredor"
+                    val replyText = "$athlete te lo agradece"
+
+                    db.cheerDao().updateStatus(notifId, "AGRADECIDO", replyText)
+
+                    // 3. Send CHEER_STATUS_UPDATE to cloud WebSocket via RunningActivityService
+                    val replyEvent = JSONObject().apply {
+                        put("type", "CHEER_STATUS_UPDATE")
+                        put("notificationId", notifId)
+                        put("sessionId", sessionId)
+                        put("status", "AGRADECIDO")
+                        put("runnerReplyText", replyText)
+                        put("timestamp", System.currentTimeMillis())
+                    }
+                    RunningActivityService.sendGatewayEvent(replyEvent)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error updating cheer status in DB: ${e.message}")
                 }
             }
-
-            // 3. Send CHEER_STATUS_UPDATE to cloud WebSocket via RunningActivityService
-            val replyEvent = JSONObject().apply {
-                put("type", "CHEER_STATUS_UPDATE")
-                put("notificationId", notifId)
-                put("sessionId", sessionId)
-                put("status", "AGRADECIDO")
-                put("runnerReplyText", "Víctor te lo agradece")
-                put("timestamp", System.currentTimeMillis())
-            }
-            RunningActivityService.sendGatewayEvent(replyEvent)
         }
     }
 

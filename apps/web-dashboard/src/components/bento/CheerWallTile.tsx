@@ -5,6 +5,7 @@ import type { CheerItem } from '../../types/cheer';
 import type { CheerPreset } from '@running-support/shared-contracts';
 import { Megaphone, Send, ShieldAlert, HeartHandshake } from 'lucide-react';
 import { formatShortTime, resolveCheerStatusConfig } from './CheerWallLogic';
+import { getRequiredAthleteName } from '../../utils/athlete';
 
 export interface CheerWallTileProps {
   cheers: CheerItem[];
@@ -24,7 +25,7 @@ export interface CheerWallTileProps {
 }
 
 function CheerItemCard({ cheer }: { cheer: CheerItem }) {
-  const fallbackReply = `${process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor'} te lo agradece`;
+  const fallbackReply = `${getRequiredAthleteName()} te lo agradece`;
   const timeStr = formatShortTime(cheer.timestamp);
   const statusCfg = resolveCheerStatusConfig(cheer.status);
 
@@ -266,7 +267,7 @@ export function CheerWallTile({
 }: CheerWallTileProps) {
   const isLocked = rateLimitSeconds > 0;
   const isDisabled = isSubmitting || isLocked;
-  const athlete = athleteName || process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
+  const athlete = getRequiredAthleteName(athleteName);
 
   return (
     <div

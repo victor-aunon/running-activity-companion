@@ -31,6 +31,8 @@ fun GatewayConsoleScreen(
     isSimulationMode: Boolean,
     pendingBufferCount: Int,
     spectatorPin: String,
+    athleteName: String = "Corredor",
+    onAthleteNameChange: (String) -> Unit = {},
     sessionName: String,
     serverUrl: String,
     garminDiagnostics: GarminDiagnostics = GarminDiagnostics(),
@@ -140,6 +142,33 @@ fun GatewayConsoleScreen(
                 }
             }
 
+            // Athlete Name Card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "NOMBRE DEL ATLETA",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = athleteName,
+                        onValueChange = onAthleteNameChange,
+                        enabled = !isServiceRunning,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("ej. Corredor") }
+                    )
+                }
+            }
+
             // Session Name / Token Card
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -162,7 +191,7 @@ fun GatewayConsoleScreen(
                         enabled = !isServiceRunning,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("carrera-victor") }
+                        placeholder = { Text("ej. carrera-live") }
                     )
                 }
             }
