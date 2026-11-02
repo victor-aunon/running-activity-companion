@@ -23,6 +23,7 @@ import { useNowPlaying } from '../../../hooks/useNowPlaying';
 import { NotificationSnackbarContainer } from '../../../components/ui/NotificationSnackbarContainer';
 import { useSpectatorNotifications } from '../../../hooks/useSpectatorNotifications';
 import { resolveTotalRaceDistance } from '../../../hooks/useSpectatorNotificationsLogic';
+import { getRequiredAthleteName } from '../../../utils/athlete';
 import type { HeartRateZoneResult } from '../../../types/telemetry';
 import type {
   RunningMetrics,
@@ -392,6 +393,8 @@ type FixtureConfig = (typeof MOCK_STITCH_FIXTURE)['config'];
 interface DashboardLayoutProps {
   vm: ReturnType<typeof extractViewMetrics>;
   resolveZone: (b: number) => HeartRateZoneResult;
+  maxHeartRateBpm?: number;
+  athleteName?: string;
   pathCoordinates: [number, number][];
   spectator: ReturnType<typeof useSpectatorCheer>;
   nowPlaying: ReturnType<typeof useNowPlaying>;
@@ -414,19 +417,21 @@ function DashboardHeader({
   gpsLocality,
   displayPin,
   onRefresh,
+  athleteName,
 }: {
   cfg: Partial<FixtureConfig>;
   vm: ReturnType<typeof extractViewMetrics>;
   gpsLocality?: string;
   displayPin?: string;
   onRefresh?: () => void;
+  athleteName?: string;
 }) {
   const resolvedLocality =
     cfg.locality || gpsLocality || process.env.NEXT_PUBLIC_DEFAULT_LOCALITY || 'Madrid, España';
 
   return (
     <HeaderTile
-      athleteName={cfg.athleteName}
+      athleteName={getRequiredAthleteName(cfg.athleteName || athleteName)}
       locality={resolvedLocality}
       elapsedSeconds={vm.elapsedSeconds}
       watchBatteryPct={vm.watchBatteryPct}
@@ -450,6 +455,8 @@ function DashboardBody(props: DashboardLayoutProps) {
     elevationText,
     eta,
     selectedPresetId,
+    athleteName,
+    maxHeartRateBpm,
   } = props;
   const cfg: Partial<FixtureConfig> = config || {};
   const fallbackPace = parseTargetPace(process.env.NEXT_PUBLIC_TARGET_PACE) ?? 270;
@@ -460,6 +467,10 @@ function DashboardBody(props: DashboardLayoutProps) {
     process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
   );
   const targetDistanceKm = totalRaceM > 0 ? Number((totalRaceM / 1000).toFixed(1)) : undefined;
+  const resolvedAthlete = getRequiredAthleteName(cfg.athleteName || athleteName);
+  const resolvedMaxHr =
+    maxHeartRateBpm ??
+    (process.env.NEXT_PUBLIC_ZONE_5_MAX ? Number(process.env.NEXT_PUBLIC_ZONE_5_MAX) : undefined);
 
   return (
     <MainDashboardContent
@@ -470,12 +481,12 @@ function DashboardBody(props: DashboardLayoutProps) {
       nowPlaying={nowPlaying}
       targetDistanceKm={targetDistanceKm}
       targetPaceSecPerKm={targetPaceSecPerKm}
-      maxHeartRateBpm={174}
+      maxHeartRateBpm={resolvedMaxHr}
       routeName={cfg.routeName}
       elevationText={elevationText || cfg.elevationProfileText}
       eta={eta || cfg.eta}
       spectatorCount={cfg.spectatorCount}
-      athleteName={cfg.athleteName}
+      athleteName={resolvedAthlete}
       selectedPresetId={selectedPresetId}
     />
   );
@@ -492,8 +503,11 @@ function DashboardLayout(props: DashboardLayoutProps) {
     gpsLocality,
     config,
     notifications,
+    athleteName,
   } = props;
   const cfg: Partial<FixtureConfig> = config || {};
+  const resolvedAthlete = getRequiredAthleteName(cfg.athleteName || athleteName);
+
   return (
     <main className="min-h-screen bg-slate-50/70 text-slate-800 relative selection:bg-indigo-100 selection:text-indigo-900 py-6">
       <AuroraGlowOrbs />
@@ -511,13 +525,15 @@ function DashboardLayout(props: DashboardLayoutProps) {
           gpsLocality={gpsLocality}
           displayPin={displayPin}
           onRefresh={onRefresh}
+          athleteName={resolvedAthlete}
         />
-        <DashboardBody {...props} />
+        <DashboardBody {...props} athleteName={resolvedAthlete} />
         <SessionSummaryModal
           isOpen={isCompleted && !isDismissed}
           onClose={onDismiss}
           metrics={vm.metrics}
           totalCheersReceived={props.spectator.cheers.length}
+          athleteName={resolvedAthlete}
         />
       </div>
     </main>
@@ -563,7 +579,7 @@ function resolveInitialNowPlaying(
 }
 
 function resolveAthleteName(mockFixture: ReturnType<typeof getInitialFixture>): string {
-  return mockFixture?.config?.athleteName || process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
+  return getRequiredAthleteName(mockFixture?.config?.athleteName);
 }
 
 function useDashboardSession(token: string) {
@@ -578,7 +594,7 @@ function useDashboardSession(token: string) {
     initialTelemetry: init.initialTelemetry,
     initialPathCoordinates: init.initialPath,
   });
-  const { resolveZone } = useEffortZones();
+  const { maxHeartRateBpm, resolveZone } = useEffortZones();
   const [isDismissed, setIsDismissed] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<CheerPreset | null>(null);
 
@@ -604,6 +620,8 @@ function useDashboardSession(token: string) {
 
   return {
     vm,
+    athlete,
+    maxHeartRateBpm,
     resolveZone,
     pathCoordinates: telemetry.pathCoordinates,
     spectator,
@@ -661,6 +679,8 @@ function SessionDashboardInner({ token }: { token: string }) {
     <DashboardLayout
       vm={session.vm}
       resolveZone={session.resolveZone}
+      maxHeartRateBpm={session.maxHeartRateBpm}
+      athleteName={session.athlete}
       pathCoordinates={session.pathCoordinates}
       spectator={session.spectator}
       nowPlaying={session.nowPlaying}

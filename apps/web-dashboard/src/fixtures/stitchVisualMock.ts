@@ -4,6 +4,9 @@ import type {
   SpectatorNotification,
 } from '@running-support/shared-contracts';
 import type { CheerItem } from '../types/cheer';
+import { getRequiredAthleteName } from '../utils/athlete';
+
+const MOCK_ATHLETE = getRequiredAthleteName();
 
 export const MOCK_STITCH_TELEMETRY: TelemetrySnapshotPacket = {
   type: 'TELEMETRY_SNAPSHOT',
@@ -50,7 +53,7 @@ export const MOCK_SPECTATOR_NOTIFICATIONS: SpectatorNotification[] = [
     id: 'mock-notif-m25',
     type: 'MILESTONE_25',
     title: '¡25% Completado!',
-    message: 'Víctor ha completado el primer cuarto del recorrido (2.5 km).',
+    message: `${MOCK_ATHLETE} ha completado el primer cuarto del recorrido (2.5 km).`,
     timestamp: 1792576500000,
     durationMs: 6000,
   },
@@ -74,7 +77,7 @@ export const MOCK_SPECTATOR_NOTIFICATIONS: SpectatorNotification[] = [
     id: 'mock-notif-exertion',
     type: 'EXERTION',
     title: 'Alto Esfuerzo',
-    message: 'Víctor está haciendo un esfuerzo (188 bpm).',
+    message: `${MOCK_ATHLETE} está haciendo un esfuerzo (188 bpm).`,
     timestamp: 1792576950000,
     durationMs: 6000,
   },
@@ -82,7 +85,7 @@ export const MOCK_SPECTATOR_NOTIFICATIONS: SpectatorNotification[] = [
     id: 'mock-notif-sprint',
     type: 'SPRINT',
     title: '¡Sprint en curso!',
-    message: '¡Víctor está sprintando a 192 bpm y 212 spm!',
+    message: `¡${MOCK_ATHLETE} está sprintando a 192 bpm y 212 spm!`,
     timestamp: 1792577000000,
     durationMs: 8000,
     cta: {
@@ -98,7 +101,7 @@ export const MOCK_STITCH_CHEERS: CheerItem[] = [
   {
     notificationId: 'notif-1',
     senderName: 'María Colomer',
-    body: '¡Estás volando Víctor! Vas clavando el ritmo objetivo de 4:20. ¡Te vemos en Cibeles!',
+    body: `¡Estás volando ${MOCK_ATHLETE}! Vas clavando el ritmo objetivo de 4:20. ¡Te vemos en Cibeles!`,
     status: 'ENVIADO',
     timestamp: 1792576940000,
   },
@@ -134,7 +137,7 @@ export const MOCK_STITCH_PATH: [number, number][] = [
 
 export const MOCK_STITCH_CONFIG = {
   pin: '4829',
-  athleteName: 'Víctor',
+  athleteName: MOCK_ATHLETE,
   locality: 'Madrid, España',
   spectatorCount: 184,
   routeName: 'Ruta GPS en Directo • Paseo de la Castellana',

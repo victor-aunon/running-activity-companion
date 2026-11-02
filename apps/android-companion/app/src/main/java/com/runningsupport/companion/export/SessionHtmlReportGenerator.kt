@@ -61,15 +61,10 @@ object SessionHtmlReportGenerator {
             for (cheer in data.cheers) {
                 val isAck = cheer.status == "AGRADECIDO"
                 val nodeColor = if (isAck) "#9333ea" else "#0284c7"
-                val statusText = when (cheer.status) {
-                    "AGRADECIDO" -> "Agradecido"
-                    "EXPIRADO" -> "Expirado"
-                    else -> "Enviado"
-                }
-                val statusBadgeClass = when (cheer.status) {
-                    "AGRADECIDO" -> "badge-ack"
-                    "EXPIRADO" -> "badge-expired"
-                    else -> "badge-sent"
+                val statusBadgeHtml = when (cheer.status) {
+                    "AGRADECIDO" -> """<span class="badge badge-ack">Agradecido</span>"""
+                    "EXPIRADO" -> ""
+                    else -> """<span class="badge badge-sent">Enviado</span>"""
                 }
                 val cheerTime = fullTimeFormat.format(Date(cheer.receivedAt))
 
@@ -83,7 +78,7 @@ object SessionHtmlReportGenerator {
                       <div class="cheer-card" style="border-left: 4px solid $nodeColor;">
                         <div class="cheer-card-header">
                           <span class="sender-name">${escapeHtml(cheer.senderName)}</span>
-                          <span class="badge $statusBadgeClass">$statusText</span>
+                          $statusBadgeHtml
                         </div>
                         <p class="cheer-body">"${escapeHtml(cheer.body)}"</p>
                 """)
@@ -345,10 +340,6 @@ object SessionHtmlReportGenerator {
     .badge-ack {
       background: #f3e8ff;
       color: #7e22ce;
-    }
-    .badge-expired {
-      background: #f1f5f9;
-      color: #64748b;
     }
     .cheer-body {
       font-size: 0.9rem;

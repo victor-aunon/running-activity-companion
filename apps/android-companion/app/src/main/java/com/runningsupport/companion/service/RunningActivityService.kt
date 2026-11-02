@@ -70,6 +70,9 @@ class RunningActivityService : Service() {
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: "default-session"
         val pin = intent?.getStringExtra(EXTRA_PIN) ?: "4829"
         val isSimulation = intent?.getBooleanExtra(EXTRA_SIMULATION_MODE, false) ?: false
+        val athleteName = intent?.getStringExtra(EXTRA_ATHLETE_NAME)?.trim()?.ifEmpty { null }
+            ?: DEFAULT_ATHLETE_NAME
+        activeAthleteName = athleteName
         currentTargetPaceSec = intent?.getDoubleExtra(EXTRA_TARGET_PACE_SEC, 270.0) ?: 270.0
         currentTotalRaceDistanceM = intent?.getDoubleExtra(EXTRA_TOTAL_RACE_DISTANCE_M, 10000.0) ?: 10000.0
         activeSessionId = sessionId
@@ -82,7 +85,7 @@ class RunningActivityService : Service() {
                         sessionId = sessionId,
                         shareableToken = token,
                         spectatorPin = pin,
-                        athleteName = "Víctor",
+                        athleteName = athleteName,
                         status = "ACTIVE",
                         startedAt = System.currentTimeMillis()
                     )
@@ -92,7 +95,7 @@ class RunningActivityService : Service() {
                         sessionId = sessionId,
                         token = token,
                         pin = pin,
-                        athleteName = "Víctor",
+                        athleteName = athleteName,
                         status = "ACTIVE",
                         startedAt = System.currentTimeMillis()
                     )
@@ -113,6 +116,7 @@ class RunningActivityService : Service() {
             pin,
             currentTargetPaceSec,
             currentTotalRaceDistanceM,
+            athleteName,
             serviceScope
         )
         gatewayClient = client
@@ -512,10 +516,13 @@ class RunningActivityService : Service() {
         const val EXTRA_SIMULATION_MODE = "extra_simulation_mode"
         const val EXTRA_TARGET_PACE_SEC = "extra_target_pace_sec"
         const val EXTRA_TOTAL_RACE_DISTANCE_M = "extra_total_race_distance_m"
+        const val EXTRA_ATHLETE_NAME = "extra_athlete_name"
+        const val DEFAULT_ATHLETE_NAME = "Corredor"
         const val DEFAULT_SERVER_URL = "ws://10.0.2.2:3001/api/ws/session"
         private const val TAG = "RunningActivityService"
 
         private var activeInstance: RunningActivityService? = null
+        var activeAthleteName: String = DEFAULT_ATHLETE_NAME
 
         private val _isServiceRunningState = MutableStateFlow(false)
         val isServiceRunningState = _isServiceRunningState.asStateFlow()
@@ -593,10 +600,15 @@ class RunningActivityService : Service() {
             }
         }
 
-        fun sendTestCheerNotification(context: Context, sessionId: String = "carrera-victor"): String {
+        fun sendTestCheerNotification(
+            context: Context,
+            sessionId: String = "carrera-live",
+            athleteName: String? = null
+        ): String {
+            val resolvedAthlete = athleteName ?: activeAthleteName
             val testId = "test-${System.currentTimeMillis()}"
             val sender = "Prueba Companion"
-            val body = "¡Mucho ánimo Víctor! Notificación inteligente de prueba"
+            val body = "¡Mucho ánimo $resolvedAthlete! Notificación inteligente de prueba"
             val cheer = com.runningsupport.companion.data.entities.CheerEntity(
                 notificationId = testId,
                 sessionId = sessionId,

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { ActionButton } from '../components/ui/button';
 import { Flame, KeyRound, ArrowRight } from 'lucide-react';
 import { requestNotificationPermissionUpfront } from '../utils/notificationPermissions';
+import { getRequiredAthleteName, getDefaultSessionToken } from '../utils/athlete';
 
 function LandingHeader() {
-  const athlete = process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor';
+  const athlete = getRequiredAthleteName();
   return (
     <div className="text-center space-y-2 mb-6">
       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100/80 text-orange-700 text-xs font-bold uppercase tracking-wider mb-2">
@@ -34,6 +35,7 @@ function TokenInputField({
   setToken: (t: string) => void;
   disabled: boolean;
 }) {
+  const defaultToken = getDefaultSessionToken();
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -44,7 +46,7 @@ function TokenInputField({
         disabled={disabled}
         value={token}
         onChange={(e) => setToken(e.target.value)}
-        placeholder="ej. carrera-victor"
+        placeholder={`ej. ${defaultToken}`}
         className="w-full px-3.5 py-2.5 text-sm bg-slate-50/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
       />
     </div>
@@ -123,7 +125,7 @@ function SessionLookupForm({
 
 function useSessionVerifier() {
   const router = useRouter();
-  const [token, setToken] = useState('carrera-victor');
+  const [token, setToken] = useState(getDefaultSessionToken);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

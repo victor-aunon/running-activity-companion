@@ -1,18 +1,20 @@
 import { WebSocket } from 'ws';
+import { getRequiredAthleteName } from '../src/utils/athlete.ts';
 
 const args = process.argv.slice(2);
-function getArg(name: string, fallback: string): string {
+function getArg(name: string, fallback?: string): string {
   const arg = args.find((a) => a.startsWith(`--${name}=`));
   if (arg) return arg.split('=')[1];
   const idx = args.indexOf(`--${name}`);
   if (idx !== -1 && args[idx + 1]) return args[idx + 1];
-  return fallback;
+  if (fallback !== undefined) return fallback;
+  return '';
 }
 
 const WS_PORT = parseInt(getArg('port', process.env.WS_PORT || process.env.PORT || '3001'), 10);
 const TOKEN = getArg('token', process.env.TOKEN || 'live-session');
 const PIN = getArg('pin', process.env.PIN || '4829');
-const ATHLETE_NAME = getArg('athlete', process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor');
+const ATHLETE_NAME = getArg('athlete') || getRequiredAthleteName();
 const TOTAL_RACE_DISTANCE_M = parseInt(getArg('raceDistance', '10000'), 10);
 
 const WS_URL = `ws://localhost:${WS_PORT}/api/ws/session?token=${encodeURIComponent(TOKEN)}&role=gateway`;

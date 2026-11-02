@@ -1,8 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEffortZones, resolveHeartRateZone } from '../../src/hooks/useEffortZones.ts';
+import {
+  parseEffortZones,
+  resolveHeartRateZone,
+  resolveMaxHeartRate,
+} from '../../src/hooks/useEffortZones.ts';
 
 void test('useEffortZones Unit Tests: Environment parsing and zone resolution', async (t) => {
+  await t.test('resolveMaxHeartRate resolves NEXT_PUBLIC_ZONE_5_MAX or falls back to zone 5 max', () => {
+    assert.equal(resolveMaxHeartRate({ NEXT_PUBLIC_ZONE_5_MAX: '202' }), 202);
+    assert.equal(resolveMaxHeartRate({ NEXT_PUBLIC_ZONE_5_MAX: '190' }), 190);
+    assert.equal(resolveMaxHeartRate({ NEXT_PUBLIC_ZONE_5_MAX: '' }), 195);
+    assert.equal(resolveMaxHeartRate({ NEXT_PUBLIC_ZONE_5_MAX: 'invalid' }), 195);
+    assert.equal(
+      resolveMaxHeartRate({}, { zone1Max: 120, zone2Max: 140, zone3Max: 160, zone4Max: 180, zone5Max: 198 }),
+      198,
+    );
+  });
   await t.test('Parses valid environment variables monotonically', () => {
     const env = {
       NEXT_PUBLIC_ZONE_1_MAX: '135',

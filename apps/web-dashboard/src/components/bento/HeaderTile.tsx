@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { StatusBadge } from '../ui/badge';
 import { MapPin, Share2, RefreshCw, Timer, Check } from 'lucide-react';
 import { formatElapsedTime } from '../../utils/formatters';
+import { getRequiredAthleteName } from '../../utils/athlete';
 
 export { formatElapsedTime };
 
@@ -205,7 +206,7 @@ function HeaderActionButtons({
 }
 
 export function HeaderTile({
-  athleteName = process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor',
+  athleteName,
   locality = process.env.NEXT_PUBLIC_DEFAULT_LOCALITY || '--',
   elapsedSeconds,
   watchBatteryPct: _watchBatteryPct,
@@ -216,10 +217,11 @@ export function HeaderTile({
   onRefresh,
   onShare,
 }: HeaderTileProps) {
+  const resolvedAthlete = getRequiredAthleteName(athleteName);
   return (
     <header className="bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 flex flex-wrap items-center justify-between gap-4">
       <AthleteInfo
-        athleteName={athleteName}
+        athleteName={resolvedAthlete}
         locality={locality}
         isLive={isLive}
         sessionStatus={sessionStatus}
@@ -227,7 +229,7 @@ export function HeaderTile({
       <HeaderActionButtons
         elapsedSeconds={elapsedSeconds}
         pin={pin}
-        athleteName={athleteName}
+        athleteName={resolvedAthlete}
         onRefresh={onRefresh}
         onShare={onShare}
       />

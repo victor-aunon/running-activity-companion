@@ -25,9 +25,14 @@ data class TimelineCheer(
 
     val formattedElapsed: String
         get() {
-            val minutes = elapsedSeconds / 60
+            val hours = elapsedSeconds / 3600
+            val minutes = (elapsedSeconds % 3600) / 60
             val seconds = elapsedSeconds % 60
-            return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            return if (hours > 0) {
+                String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            }
         }
 }
 

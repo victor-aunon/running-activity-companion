@@ -6,6 +6,7 @@ import { formatElapsedTime } from './HeaderTile';
 import { formatPace, formatDistanceKm } from './MetricTile';
 import type { RunningMetrics } from '@running-support/shared-contracts';
 import { Trophy, X } from 'lucide-react';
+import { getRequiredAthleteName } from '../../utils/athlete';
 
 export interface SessionSummaryModalProps {
   isOpen: boolean;
@@ -64,10 +65,11 @@ export function SessionSummaryModal({
   onClose,
   metrics,
   totalCheersReceived = 0,
-  athleteName = process.env.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor',
+  athleteName,
 }: SessionSummaryModalProps) {
   if (!isOpen) return null;
 
+  const resolvedAthlete = getRequiredAthleteName(athleteName);
   const elapsed = metrics ? formatElapsedTime(metrics.elapsedSeconds) : '00:00';
   const dist = metrics ? formatDistanceKm(metrics.totalDistanceM) : '0.00';
   const pace = metrics ? formatPace(metrics.paceSecPerKm) : '--:--';
@@ -75,7 +77,7 @@ export function SessionSummaryModal({
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bento-card w-full max-w-md p-6 bg-white shadow-2xl rounded-xl space-y-4">
-        <ModalHeader athlete={athleteName} onClose={onClose} />
+        <ModalHeader athlete={resolvedAthlete} onClose={onClose} />
         <div className="py-2 space-y-1">
           <MetricSummaryRow label="Tiempo Total" value={elapsed} />
           <MetricSummaryRow label="Distancia Recorrida" value={`${dist} km`} />
