@@ -38,8 +38,6 @@ jobs:
 
       - name: Validate Web Dashboard Build
         run: pnpm --filter web-dashboard build
-        env:
-          NEXT_PUBLIC_ATHLETE_NAME: ${{ vars.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor' }}
 
   # --- TRABAJO 2: DESPLIEGUE CONTINUO (BUILD & PUSH) ---
   build-and-push:
@@ -81,8 +79,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NEXT_PUBLIC_ATHLETE_NAME=${{ vars.NEXT_PUBLIC_ATHLETE_NAME || 'Víctor' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

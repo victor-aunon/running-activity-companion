@@ -31,7 +31,15 @@ Sistema distribuido de telemetría y soporte en tiempo real para corredores de f
 ### ¿Tengo que modificar archivos de código en Android o en Garmin?
 **ROTUNDAMENTE NO.**
 * **En Garmin (`apps/garmin-fenix7s`)**: El código ya viene 100% configurado con los UUIDs de BLE estándar de Nordic/Running Support. Solo necesitas compilarlo con tu clave `.der`.
-* **En Android (`apps/android-companion`)**: **No necesitas tocar ningún archivo.** La URL del servidor WebSocket (sea tu servidor en la nube `wss://...` o tu IP local en Wi-Fi) **se introduce directamente en la pantalla de la app** en el campo *"SERVIDOR RELAY WEBSOCKET"*. La app la recuerda automáticamente mediante preferencias locales.
+* **En Android (`apps/android-companion`)**: **No necesitas tocar ningún archivo de código.** Toda la configuración se realiza directamente desde la pantalla principal de la aplicación:
+  - **Servidor Relay (WebSocket / HTTP)**: introduce `ws://...`, `wss://...` o `http://...`.
+  - **Nombre del Atleta**: personalizable en caliente (ej. `"Víctor"` o `"Corredor"`).
+  - **Identificador de Sesión**: token único para la carrera (ej. `"carrera-victor"` o `"carrera-live"`).
+  - **PIN de Espectador**: código de 4 dígitos para proteger la sesión frente a accesos no autorizados.
+  - **Ritmo Objetivo y Distancia de Carrera**: parámetros proyectivos para cálculo dinámico de ETA.
+  - **Exportar Sesión en HTML**: botón para generar y compartir un informe Bento Box HTML autónomo e interactivo con el recorrido y los ánimos recibidos.
+  
+  La app recuerda todos los valores automáticamente mediante preferencias locales.
 
 ---
 
@@ -131,15 +139,20 @@ El archivo APK resultante se generará en:
 ### Paso 3: Configurar y Arrancar en el Teléfono
 1. Abre la aplicación **Running Support Gateway** en tu teléfono.
 2. Concede los permisos que te solicite (Dispositivos cercanos / Bluetooth y Notificaciones).
-3. **Configura la URL de tu Servidor**:
-   * En el campo **"SERVIDOR RELAY WEBSOCKET"**, escribe la URL de tu servidor:
+3. **Ajusta los Parámetros de la Sesión**:
+   * **Nombre del Atleta**: Escribe tu nombre o apodo (ej: `Víctor`).
+   * **Identificador de Sesión**: Define el token de la carrera (ej: `carrera-victor`).
+   * **PIN de Espectador**: Define el PIN de 4 dígitos para tus seguidores (ej: `4829`).
+   * **Servidor Relay (WebSocket / HTTP)**: Escribe la URL de tu servidor:
      - **En pruebas locales (mismo Wi-Fi)**: `ws://192.168.1.XX:3001/api/ws/session` (la IP local de tu ordenador).
      - **En emulador Android**: `ws://10.0.2.2:3001/api/ws/session`.
      - **En producción (desplegado en internet)**: `wss://tudominio.com/api/ws/session`.
+   * **Ritmo Objetivo / Distancia**: Introduce tu ritmo objetivo (ej. `4:30`) y distancia (ej. `10.0 km`) para el cálculo dinámico de ETA en el dashboard.
 4. Enciende el interruptor **"Servicio en Primer Plano"**:
-   * La app conectará por BLE con tu reloj y abrirá el socket con tu servidor.
-   * La app mostrará en grande el **PIN DE ACCESO ESPECTADORES** (ej: `4829`) para que se lo des a tus seguidores.
-   * Si escuchas Spotify en el móvil, la app detectará la música y la transmitirá automáticamente al dashboard.
+   * La app conectará por BLE con tu reloj y abrirá el socket con tu servidor relay.
+   * Si escuchas Spotify en el móvil, la app detectará la pista activa en tiempo real y la transmitirá al dashboard.
+5. **Exportación HTML al finalizar**:
+   * Al terminar tu entrenamiento o carrera, puedes pulsar **"Exportar Sesión en HTML"** para generar un informe Bento Box HTML autónomo y compartirlo directamente desde el móvil.
 
 ---
 
@@ -197,12 +210,14 @@ pnpm --filter web-dashboard relay
 Abre en tu navegador `http://localhost:3000`.
 
 ### Despliegue en Producción (Docker / Dokploy / VPS):
-El proyecto incluye un `Dockerfile` multi-stage optimizado que ejecuta el servidor unificado (`server.mjs`) en el puerto 3000 (manejando tanto el frontend Next.js como el endpoint WebSocket `/api/ws/session` en el mismo puerto):
+El proyecto incluye un `Dockerfile` multi-stage optimizado que ejecuta el servidor unificado (`server.mjs`) en el puerto 3000 (manejando tanto el frontend Next.js como el endpoint WebSocket `/api/ws/session` en el mismo puerto).
+
+La imagen se compila de forma estándar y limpia sin requerir build-arguments. La variable del atleta y demás configuraciones se inyectan **dinámicamente en tiempo de ejecución (runtime)** mediante Server Components de Next.js, por lo que puedes definirlas directamente en la pestaña **Environment** de Dokploy o pasarlas con `-e` al ejecutar el contenedor:
 ```bash
-# Construir imagen Docker
+# Construir imagen Docker limpia
 docker build -t running-activity-support .
 
-# Ejecutar contenedor
+# Ejecutar contenedor con variables de runtime opcionales (por defecto: Atleta="Víctor")
 docker run -d -p 3000:3000 \
   -e NEXT_PUBLIC_ATHLETE_NAME="Víctor" \
   -e NEXT_PUBLIC_WS_URL="wss://tudominio.com/api/ws/session" \
@@ -222,12 +237,18 @@ Si quieres probar todo el sistema en tu ordenador sin necesidad del reloj ni del
 2. Inicia el simulador de corredor:
    ```bash
    pnpm --filter web-dashboard simulate:runner -- --token=live-session --pin=4829
+   # O desde la raíz: pnpm run simulate:runner -- --token=live-session --pin=4829
    ```
 3. En otra terminal, emite música en vivo simulada de Spotify:
    ```bash
    pnpm --filter web-dashboard simulate:now-playing -- --title="The Pretender" --artist="Foo Fighters" --state=PLAYING
+   # O desde la raíz: pnpm run simulate:now-playing -- --title="The Pretender" --artist="Foo Fighters" --state=PLAYING
    ```
-4. Entra a `http://localhost:3000` y haz clic en **"Acceso Rápido (Carrera en Vivo)"** o accede a `http://localhost:3000/session/live-session`. Verás la telemetría en tiempo real sobre el mapa de Madrid y el reproductor de Spotify activo sobre el muro de ánimo.
+4. Entra a `http://localhost:3000` e introduce el identificador de sesión `live-session` y el PIN `4829` en la tarjeta de acceso, o accede directamente con el PIN en la URL:
+   ```text
+   http://localhost:3000/session/live-session?pin=4829
+   ```
+   Verás la telemetría en tiempo real sobre el mapa de Madrid, la estimación dinámica de llegada (ETA) y el reproductor de Spotify activo sobre el muro de ánimos.
 
 ---
 

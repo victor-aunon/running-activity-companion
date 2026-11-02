@@ -17,6 +17,7 @@
     "test:android": "node scripts/test-android.mjs",
     "test:garmin": "node scripts/test-garmin.mjs",
     "simulate:runner": "npm --workspace=apps/web-dashboard run simulate:runner",
+    "simulate:now-playing": "npm --workspace=apps/web-dashboard run simulate:now-playing",
     "quality-gate": ".specify/scripts/bash/check-quality-gate.sh",
     "visual-gate": ".specify/scripts/bash/verify-stitch-design.sh"
   },

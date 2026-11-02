@@ -14,7 +14,8 @@
     "test:integration": "node --test tests/integration",
     "test:design": "playwright test --config=playwright.design.config.ts",
     "relay": "ts-node scripts/start-relay.ts",
-    "simulate:runner": "ts-node scripts/simulate-runner.ts"
+    "simulate:runner": "ts-node scripts/simulate-runner.ts",
+    "simulate:now-playing": "ts-node scripts/simulate-now-playing.ts"
   },
   "dependencies": {
     "@running-support/shared-contracts": "workspace:*",
