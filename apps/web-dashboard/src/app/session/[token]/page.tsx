@@ -22,6 +22,7 @@ import { useSpectatorCheer } from '../../../hooks/useSpectatorCheer';
 import { useNowPlaying } from '../../../hooks/useNowPlaying';
 import { NotificationSnackbarContainer } from '../../../components/ui/NotificationSnackbarContainer';
 import { useSpectatorNotifications } from '../../../hooks/useSpectatorNotifications';
+import { useLiveEta } from '../../../hooks/useLiveEta';
 import { resolveTotalRaceDistance } from '../../../hooks/useSpectatorNotificationsLogic';
 import { getRequiredAthleteName } from '../../../utils/athlete';
 import type { HeartRateZoneResult } from '../../../types/telemetry';
@@ -558,12 +559,12 @@ function resolveLiveMetrics(
   mockFixture: typeof MOCK_STITCH_FIXTURE | undefined,
   vm: ReturnType<typeof extractViewMetrics>,
   elevationHistory: number[],
+  calculatedEta?: string,
 ) {
   const cfg = mockFixture?.config;
-  const liveEta = calculateDynamicEta(vm.metrics?.totalDistanceM, vm.metrics?.speedMps, 21097);
   const liveElevation = formatElevationProfile(elevationHistory, vm.elevationM);
   return {
-    eta: cfg?.eta || liveEta,
+    eta: cfg?.eta || calculatedEta || '--:--',
     elevationText: cfg?.elevationProfileText || liveElevation,
   };
 }
@@ -606,7 +607,18 @@ function useDashboardSession(token: string) {
   });
 
   const vm = extractViewMetrics(telemetry.telemetry, telemetry.sessionStatus);
-  const live = resolveLiveMetrics(mockFixture, vm, telemetry.elevationHistory);
+  const totalRaceDistanceM = resolveTotalRaceDistance(
+    vm.metrics?.totalRaceDistanceM,
+    process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
+  );
+  const liveEta = useLiveEta({
+    totalDistanceM: vm.metrics?.totalDistanceM,
+    targetDistanceM: totalRaceDistanceM,
+    paceSecPerKm: vm.metrics?.paceSecPerKm,
+    speedMps: vm.metrics?.speedMps,
+    isCompleted: vm.isCompleted,
+  });
+  const live = resolveLiveMetrics(mockFixture, vm, telemetry.elevationHistory, liveEta);
   const gpsLocality = useGpsLocality(vm.lat, vm.lng);
   const nowPlaying = useNowPlaying({
     client: telemetry.client,

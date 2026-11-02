@@ -185,17 +185,56 @@ export function resolveCadenceZone(
   };
 }
 
+export interface CalculateEtaOptions {
+  totalDistanceM?: number | null;
+  targetDistanceM?: number | null;
+  paceSecPerKm?: number | null;
+  speedMps?: number | null;
+  nowMs?: number;
+}
+
 export function calculateDynamicEta(
-  totalDistanceM?: number | null,
-  speedMps?: number | null,
-  targetDistanceM = 21097,
+  input?: CalculateEtaOptions | number | null,
+  speedOrPace?: number | null,
+  targetDistanceM?: number | null,
+  nowMs?: number,
 ): string {
-  if (!totalDistanceM || !speedMps || speedMps <= 0.5 || totalDistanceM >= targetDistanceM) {
+  let totalDist: number | null | undefined;
+  let targetDist: number | null | undefined;
+  let paceSec: number | null | undefined;
+  let speed: number | null | undefined;
+  let now: number;
+
+  if (typeof input === 'object' && input !== null) {
+    totalDist = input.totalDistanceM;
+    targetDist = input.targetDistanceM ?? 21097;
+    paceSec = input.paceSecPerKm;
+    speed = input.speedMps;
+    now = input.nowMs ?? Date.now();
+  } else {
+    totalDist = input;
+    targetDist = targetDistanceM ?? 21097;
+    speed = speedOrPace;
+    now = nowMs ?? Date.now();
+  }
+
+  if (!totalDist || totalDist <= 0 || !targetDist || targetDist <= 0 || totalDist >= targetDist) {
     return '--:--';
   }
-  const remainingM = targetDistanceM - totalDistanceM;
-  const remainingSecs = remainingM / speedMps;
-  const targetTimeMs = Date.now() + remainingSecs * 1000;
+
+  const remainingM = targetDist - totalDist;
+  let remainingSecs: number;
+
+  if (paceSec !== undefined && paceSec !== null && paceSec > 0) {
+    const remainingKm = remainingM / 1000;
+    remainingSecs = paceSec * remainingKm;
+  } else if (speed !== undefined && speed !== null && speed > 0.5) {
+    remainingSecs = remainingM / speed;
+  } else {
+    return '--:--';
+  }
+
+  const targetTimeMs = now + remainingSecs * 1000;
   const date = new Date(targetTimeMs);
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
