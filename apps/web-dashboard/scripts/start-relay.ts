@@ -2,6 +2,7 @@ import http from 'node:http';
 import { parse } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createRelayServer } from '../src/services/RelayServerLogic.ts';
+import { handleRelayHttpRequest } from '../src/services/RelayHttpRouter.ts';
 
 const PORT = parseInt(process.env.WS_PORT || process.env.PORT || '3001', 10);
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
@@ -10,27 +11,9 @@ const wss = new WebSocketServer({ noServer: true });
 const relay = createRelayServer(wss, { verbose: isVerbose });
 
 const server = http.createServer((req, res) => {
-  const { pathname, query } = parse(req.url || '', true);
+  const parsedUrl = parse(req.url || '', true);
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
-    res.end();
-    return;
-  }
-
-  if (pathname === '/api/session/verify') {
-    const token = (query.token as string) || '';
-    const pin = (query.pin as string) || '';
-    const result = relay.verifySession(token, pin);
-    res.writeHead(result.valid ? 200 : 401, {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(JSON.stringify(result));
+  if (handleRelayHttpRequest(req, res, relay, parsedUrl)) {
     return;
   }
 
@@ -41,8 +24,15 @@ const server = http.createServer((req, res) => {
   res.end(
     JSON.stringify({
       status: 'UP',
-      service: 'WebSocket Relay Server',
+      service: 'Unified Relay Server (Dev)',
       endpoint: '/api/ws/session',
+      httpEndpoints: [
+        '/api/gateway/*',
+        '/api/session/stream',
+        '/api/session/cheer',
+        '/api/session/verify',
+        '/api/session/path',
+      ],
     }),
   );
 });
@@ -60,10 +50,10 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(PORT, () => {
   console.log(
-    `\n🚀 [RELAY] WebSocket Relay Server listening on: ws://localhost:${PORT}/api/ws/session`,
+    `\n🚀 [RELAY DEV] Unified Relay Server listening on: http://localhost:${PORT} (WS: /api/ws/session)`,
   );
   console.log(
-    `📡 Ready to relay telemetry (${isVerbose ? 'Modo VERBOSE: 1 Hz' : 'Modo LIMPIO: primer paquete y desconexión | añade --verbose para ver cada segundo'})`,
+    `📡 Ready to relay HTTP Gateway, SSE stream and WebSockets (${isVerbose ? 'Modo VERBOSE: 1 Hz' : 'Modo LIMPIO | añade --verbose para ver cada segundo'})`,
   );
   console.log('👉 In another terminal, run: pnpm --filter web-dashboard simulate:runner\n');
 });

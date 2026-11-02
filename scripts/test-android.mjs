@@ -28,6 +28,9 @@ if (!env.JAVA_HOME) {
     env.JAVA_HOME = localJdk;
   }
 }
+if (env.JAVA_HOME) {
+  env.PATH = `${path.join(env.JAVA_HOME, 'bin')}:${env.PATH || ''}`;
+}
 
 // 2. Configurar Android SDK si no está en el entorno
 const localSdk = path.join(os.homedir(), '.android-sdk');

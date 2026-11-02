@@ -3,6 +3,7 @@ import { parse } from 'node:url';
 import next from 'next';
 import { WebSocketServer } from 'ws';
 import { createRelayServer } from './src/services/RelayServerLogic.ts';
+import { handleRelayHttpRequest } from './src/services/RelayHttpRouter.ts';
 
 const recentLogs = [];
 const originalLog = console.log;
@@ -37,205 +38,6 @@ const handle = app.getRequestHandler();
 
 await app.prepare();
 
-const server = http.createServer((req, res) => {
-  const parsedUrl = parse(req.url || '', true);
-  if (parsedUrl.pathname === '/api/debug/logs') {
-    res.writeHead(200, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(recentLogs.join('\n'));
-    return;
-  }
-  if (parsedUrl.pathname === '/api/debug/rooms') {
-    const token = parsedUrl.query.token;
-    const data = token ? relay.getRoomDetails(token) : relay.getAllRooms();
-    res.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(JSON.stringify(data, null, 2));
-    return;
-  }
-  if (parsedUrl.pathname === '/api/session/verify') {
-    const token = parsedUrl.query.token || '';
-    const pin = parsedUrl.query.pin || '';
-    const result = relay.verifySession(token, pin);
-    res.writeHead(result.valid ? 200 : 401, {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(JSON.stringify(result));
-    return;
-  }
-  if (parsedUrl.pathname === '/api/session/path') {
-    const token = (parsedUrl.query.token || '').toString();
-    const coordinates = relay.getPathHistory ? relay.getPathHistory(token) : [];
-    res.writeHead(200, {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(JSON.stringify({ coordinates }));
-    return;
-  }
-  if (parsedUrl.pathname === '/api/session/stream') {
-    const token = (parsedUrl.query.token || '').toString().trim().toLowerCase();
-    const pin = (parsedUrl.query.pin || '').toString().trim();
-
-    // Verify PIN if session requires PIN
-    const verify = relay.verifySession ? relay.verifySession(token, pin) : { valid: true };
-    if (!verify.valid && verify.error) {
-      res.writeHead(401, {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      });
-      res.end(JSON.stringify({ error: verify.error }));
-      return;
-    }
-
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'X-Accel-Buffering': 'no',
-    });
-    if (typeof res.flushHeaders === 'function') {
-      res.flushHeaders();
-    }
-
-    // Deliver backlog messages immediately
-    const backlog = relay.getSpectatorBacklogMessages ? relay.getSpectatorBacklogMessages(token) : [];
-    for (const msg of backlog) {
-      res.write(`data: ${msg}\n\n`);
-    }
-
-    // Subscribe to ongoing live broadcasts
-    const unsubscribe = relay.subscribeSseSpectator
-      ? relay.subscribeSseSpectator(token, (payload) => {
-          res.write(`data: ${payload}\n\n`);
-        })
-      : () => {};
-
-    // Keep-alive heartbeat comment every 15s to keep all intermediate proxies active
-    const heartbeatTimer = setInterval(() => {
-      if (!res.destroyed && !res.writableEnded) {
-        try {
-          res.write(`: ping\n\n`);
-        } catch {
-          // Stream already closed
-        }
-      }
-    }, 15000);
-
-    req.on('close', () => {
-      clearInterval(heartbeatTimer);
-      unsubscribe();
-    });
-    return;
-  }
-  if (parsedUrl.pathname === '/api/session/cheer') {
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      });
-      res.end();
-      return;
-    }
-    if (req.method === 'POST') {
-      let rawBody = '';
-      req.on('data', (chunk) => {
-        rawBody += chunk;
-      });
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(rawBody || '{}');
-          const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
-            .toString()
-            .split(',')[0]
-            .trim();
-          const result = relay.dispatchCheerHttp
-            ? relay.dispatchCheerHttp(payload, clientIp)
-            : { success: false, status: 500, message: 'Relay no disponible' };
-          res.writeHead(result.status || (result.success ? 200 : 400), {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          });
-          res.end(JSON.stringify(result));
-        } catch {
-          res.writeHead(400, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          });
-          res.end(JSON.stringify({ success: false, error: 'JSON malformado' }));
-        }
-      });
-      return;
-    }
-  }
-  if (parsedUrl.pathname.startsWith('/api/gateway/')) {
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      });
-      res.end();
-      return;
-    }
-    if (req.method === 'POST') {
-      let rawBody = '';
-      req.on('data', (c) => (rawBody += c));
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(rawBody || '{}');
-          let result = { status: 'OK' };
-          if (parsedUrl.pathname === '/api/gateway/session') {
-            result = relay.registerGatewayHttp
-              ? relay.registerGatewayHttp(payload)
-              : { status: 'READY' };
-          } else if (parsedUrl.pathname === '/api/gateway/telemetry') {
-            result = relay.ingestTelemetryHttp
-              ? relay.ingestTelemetryHttp(payload)
-              : { status: 'OK', pendingCheers: [] };
-          } else if (parsedUrl.pathname === '/api/gateway/now-playing') {
-            result = relay.ingestNowPlayingHttp
-              ? relay.ingestNowPlayingHttp(payload)
-              : { status: 'OK' };
-          } else if (parsedUrl.pathname === '/api/gateway/session/complete') {
-            result = relay.completeSessionHttp
-              ? relay.completeSessionHttp(payload)
-              : { status: 'OK' };
-          } else if (parsedUrl.pathname === '/api/gateway/cheer-ack') {
-            result = relay.ackCheerHttp
-              ? relay.ackCheerHttp(payload)
-              : { status: 'OK' };
-          }
-          res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          });
-          res.end(JSON.stringify(result));
-        } catch {
-          res.writeHead(400, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          });
-          res.end(JSON.stringify({ error: 'JSON malformado' }));
-        }
-      });
-      return;
-    }
-  }
-  void handle(req, res, parsedUrl);
-});
-
-// Configure keep-alive timeouts strictly higher than reverse proxy to eliminate EOFException race conditions
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
-
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 // Disable perMessageDeflate to prevent proxy compression desync (Context Takeover) that causes 1006 disconnects in browsers behind Traefik
 const wss = new WebSocketServer({
@@ -243,6 +45,18 @@ const wss = new WebSocketServer({
   perMessageDeflate: false,
 });
 const relay = createRelayServer(wss, { verbose: isVerbose });
+
+const server = http.createServer((req, res) => {
+  const parsedUrl = parse(req.url || '', true);
+  if (handleRelayHttpRequest(req, res, relay, { parsedUrl, recentLogs })) {
+    return;
+  }
+  void handle(req, res, parsedUrl);
+});
+
+// Configure keep-alive timeouts strictly higher than reverse proxy to eliminate EOFException race conditions
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
 
 server.on('upgrade', (req, socket, head) => {
   socket.setTimeout(0);

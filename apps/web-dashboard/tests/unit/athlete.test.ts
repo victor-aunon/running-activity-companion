@@ -18,10 +18,7 @@ void test('Athlete utilities: Strict environment validation without fallbacks', 
   });
 
   await t.test('Throws an error when NEXT_PUBLIC_ATHLETE_NAME is undefined or empty', () => {
-    assert.throws(
-      () => getRequiredAthleteName(undefined, {}),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
+    assert.throws(() => getRequiredAthleteName(undefined, {}), /NEXT_PUBLIC_ATHLETE_NAME/);
     assert.throws(
       () => getRequiredAthleteName(undefined, { NEXT_PUBLIC_ATHLETE_NAME: '' }),
       /NEXT_PUBLIC_ATHLETE_NAME/,
@@ -33,30 +30,24 @@ void test('Athlete utilities: Strict environment validation without fallbacks', 
   });
 
   await t.test('Throws an error when explicit name is empty and env is also missing', () => {
-    assert.throws(
-      () => getRequiredAthleteName('', {}),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
-    assert.throws(
-      () => getRequiredAthleteName('   ', {}),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
+    assert.throws(() => getRequiredAthleteName('', {}), /NEXT_PUBLIC_ATHLETE_NAME/);
+    assert.throws(() => getRequiredAthleteName('   ', {}), /NEXT_PUBLIC_ATHLETE_NAME/);
   });
 
   await t.test('getAthleteSlug sanitizes accents and special characters properly', () => {
     assert.equal(getAthleteSlug('Víctor'), 'victor');
     assert.equal(getAthleteSlug('María José'), 'maria-jose');
-    assert.equal(getAthleteSlug('Álvaro O\'Donnell'), 'alvaro-o-donnell');
+    assert.equal(getAthleteSlug("Álvaro O'Donnell"), 'alvaro-o-donnell');
   });
 
-  await t.test('getDefaultSessionToken constructs slugged token or throws if env is missing', () => {
-    assert.equal(
-      getDefaultSessionToken(undefined, { NEXT_PUBLIC_ATHLETE_NAME: 'Ana García' }),
-      'carrera-ana-garcia',
-    );
-    assert.throws(
-      () => getDefaultSessionToken(undefined, {}),
-      /NEXT_PUBLIC_ATHLETE_NAME/,
-    );
-  });
+  await t.test(
+    'getDefaultSessionToken constructs slugged token or throws if env is missing',
+    () => {
+      assert.equal(
+        getDefaultSessionToken(undefined, { NEXT_PUBLIC_ATHLETE_NAME: 'Ana García' }),
+        'carrera-ana-garcia',
+      );
+      assert.throws(() => getDefaultSessionToken(undefined, {}), /NEXT_PUBLIC_ATHLETE_NAME/);
+    },
+  );
 });

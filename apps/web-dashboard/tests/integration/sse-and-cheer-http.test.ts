@@ -12,7 +12,7 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       });
       const backlog = relay.getSpectatorBacklogMessages(token);
       for (const msg of backlog) {
@@ -70,100 +70,110 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
     server.close();
   });
 
-  await t.test('Gateway registers and SSE spectator receives initial backlog and live 1Hz telemetry', async () => {
-    const sessionToken = 'sse_test_room';
+  await t.test(
+    'Gateway registers and SSE spectator receives initial backlog and live 1Hz telemetry',
+    async () => {
+      const sessionToken = 'sse_test_room';
 
-    // 1. Connect Android Gateway via WS
-    const gw = new WebSocket(`ws://localhost:${port}/api/ws/session?token=${sessionToken}&role=gateway`);
-    await new Promise((r) => gw.on('open', r));
+      // 1. Connect Android Gateway via WS
+      const gw = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=${sessionToken}&role=gateway`,
+      );
+      await new Promise((r) => gw.on('open', r));
 
-    gw.send(
-      JSON.stringify({
-        type: 'GATEWAY_REGISTER',
-        sessionId: sessionToken,
-        spectatorPin: '4321',
-        athleteName: 'Víctor',
-      }),
-    );
+      gw.send(
+        JSON.stringify({
+          type: 'GATEWAY_REGISTER',
+          sessionId: sessionToken,
+          spectatorPin: '4321',
+          athleteName: 'Víctor',
+        }),
+      );
 
-    // Send initial telemetry from gateway
-    gw.send(
-      JSON.stringify({
-        type: 'TELEMETRY_SNAPSHOT',
-        sessionId: sessionToken,
-        seq: 1,
-        timestamp: Date.now(),
-        metrics: { heartRateBpm: 155, speedMps: 3.5 },
-        coordinates: { lat: 40.4168, lng: -3.7038 },
-      }),
-    );
+      // Send initial telemetry from gateway
+      gw.send(
+        JSON.stringify({
+          type: 'TELEMETRY_SNAPSHOT',
+          sessionId: sessionToken,
+          seq: 1,
+          timestamp: Date.now(),
+          metrics: { heartRateBpm: 155, speedMps: 3.5 },
+          coordinates: { lat: 40.4168, lng: -3.7038 },
+        }),
+      );
 
-    await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
 
-    // 2. Connect Spectator via SSE (HTTP GET stream)
-    const sseChunks: string[] = [];
-    const sseReq = http.get(`http://localhost:${port}/api/session/stream?token=${sessionToken}`, (res) => {
-      assert.equal(res.statusCode, 200);
-      assert.equal(res.headers['content-type'], 'text/event-stream');
+      // 2. Connect Spectator via SSE (HTTP GET stream)
+      const sseChunks: string[] = [];
+      const sseReq = http.get(
+        `http://localhost:${port}/api/session/stream?token=${sessionToken}`,
+        (res) => {
+          assert.equal(res.statusCode, 200);
+          assert.equal(res.headers['content-type'], 'text/event-stream');
 
-      res.on('data', (chunk) => {
-        sseChunks.push(chunk.toString());
+          res.on('data', (chunk) => {
+            sseChunks.push(chunk.toString());
+          });
+        },
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify initial backlog arrived via SSE
+      assert.ok(sseChunks.length > 0);
+      assert.ok(sseChunks.some((c) => c.includes('TELEMETRY_SNAPSHOT')));
+
+      // 3. Gateway broadcasts live update #2
+      gw.send(
+        JSON.stringify({
+          type: 'TELEMETRY_SNAPSHOT',
+          sessionId: sessionToken,
+          seq: 2,
+          timestamp: Date.now(),
+          metrics: { heartRateBpm: 160, speedMps: 3.8 },
+        }),
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify live update #2 arrived via SSE
+      assert.ok(sseChunks.some((c) => c.includes('"seq":2')));
+
+      // 4. Spectator sends cheer via HTTP POST
+      const cheerPostRes = await fetch(`http://localhost:${port}/api/session/cheer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: sessionToken,
+          pin: '4321',
+          senderName: 'Laura',
+          presetId: 'FIRE',
+          body: '¡Fuego en las piernas!',
+        }),
       });
-    });
 
-    await new Promise((r) => setTimeout(r, 50));
+      assert.equal(cheerPostRes.status, 200);
+      const cheerResult = await cheerPostRes.json();
+      assert.equal(cheerResult.success, true);
+      assert.ok(cheerResult.notificationId);
 
-    // Verify initial backlog arrived via SSE
-    assert.ok(sseChunks.length > 0);
-    assert.ok(sseChunks.some((c) => c.includes('TELEMETRY_SNAPSHOT')));
+      await new Promise((r) => setTimeout(r, 50));
 
-    // 3. Gateway broadcasts live update #2
-    gw.send(
-      JSON.stringify({
-        type: 'TELEMETRY_SNAPSHOT',
-        sessionId: sessionToken,
-        seq: 2,
-        timestamp: Date.now(),
-        metrics: { heartRateBpm: 160, speedMps: 3.8 },
-      }),
-    );
+      // Verify cheer was broadcasted to SSE stream
+      assert.ok(sseChunks.some((c) => c.includes('CHEER_STATUS_UPDATE') && c.includes('Laura')));
 
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Verify live update #2 arrived via SSE
-    assert.ok(sseChunks.some((c) => c.includes('"seq":2')));
-
-    // 4. Spectator sends cheer via HTTP POST
-    const cheerPostRes = await fetch(`http://localhost:${port}/api/session/cheer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: sessionToken,
-        pin: '4321',
-        senderName: 'Laura',
-        presetId: 'FIRE',
-        body: '¡Fuego en las piernas!',
-      }),
-    });
-
-    assert.equal(cheerPostRes.status, 200);
-    const cheerResult = await cheerPostRes.json();
-    assert.equal(cheerResult.success, true);
-    assert.ok(cheerResult.notificationId);
-
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Verify cheer was broadcasted to SSE stream
-    assert.ok(sseChunks.some((c) => c.includes('CHEER_STATUS_UPDATE') && c.includes('Laura')));
-
-    sseReq.destroy();
-    gw.close();
-  });
+      sseReq.destroy();
+      gw.close();
+    },
+  );
 
   await t.test('HTTP Cheer rejects invalid PIN with 401', async () => {
     const sessionToken = 'sse_pin_room';
 
-    const gw = new WebSocket(`ws://localhost:${port}/api/ws/session?token=${sessionToken}&role=gateway`);
+    const gw = new WebSocket(
+      `ws://localhost:${port}/api/ws/session?token=${sessionToken}&role=gateway`,
+    );
     await new Promise((r) => gw.on('open', r));
 
     gw.send(
@@ -227,102 +237,108 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
     gw.close();
   });
 
-  await t.test('Pure HTTP Gateway: Registers session, uploads telemetry, and receives pending cheers without WebSocket', async () => {
-    const sessionToken = 'http_gw_room';
+  await t.test(
+    'Pure HTTP Gateway: Registers session, uploads telemetry, and receives pending cheers without WebSocket',
+    async () => {
+      const sessionToken = 'http_gw_room';
 
-    // 1. Register session via HTTP POST
-    const regRes = await fetch(`http://localhost:${port}/api/gateway/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: sessionToken,
-        sessionId: sessionToken,
-        spectatorPin: '5555',
-        athleteName: 'Víctor',
-        targetPaceSecPerKm: 280,
-        totalRaceDistanceM: 21100,
-      }),
-    });
-    assert.equal(regRes.status, 200);
-    const regJson = await regRes.json();
-    assert.equal(regJson.status, 'READY');
-
-    // 2. Spectator connects via SSE
-    const sseChunks: string[] = [];
-    const sseReq = http.get(`http://localhost:${port}/api/session/stream?token=${sessionToken}&pin=5555`, (res) => {
-      assert.equal(res.statusCode, 200);
-      res.on('data', (chunk) => sseChunks.push(chunk.toString()));
-    });
-
-    try {
-      await new Promise((r) => setTimeout(r, 50));
-
-      // 3. Upload telemetry via HTTP POST
-      const telemRes = await fetch(`http://localhost:${port}/api/gateway/telemetry`, {
+      // 1. Register session via HTTP POST
+      const regRes = await fetch(`http://localhost:${port}/api/gateway/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: sessionToken,
           sessionId: sessionToken,
-          seq: 1,
-          timestamp: Date.now(),
-          metrics: { heartRateBpm: 158, speedMps: 3.6 },
-          coordinates: { lat: 40.4168, lng: -3.7038 },
+          spectatorPin: '5555',
+          athleteName: 'Víctor',
+          targetPaceSecPerKm: 280,
+          totalRaceDistanceM: 21100,
         }),
       });
-      assert.equal(telemRes.status, 200);
-      const telemJson = await telemRes.json();
-      assert.equal(telemJson.status, 'OK');
-      assert.deepEqual(telemJson.pendingCheers, []);
+      assert.equal(regRes.status, 200);
+      const regJson = await regRes.json();
+      assert.equal(regJson.status, 'READY');
 
-      await new Promise((r) => setTimeout(r, 50));
-      assert.ok(sseChunks.some((c) => c.includes('TELEMETRY_SNAPSHOT')));
+      // 2. Spectator connects via SSE
+      const sseChunks: string[] = [];
+      const sseReq = http.get(
+        `http://localhost:${port}/api/session/stream?token=${sessionToken}&pin=5555`,
+        (res) => {
+          assert.equal(res.statusCode, 200);
+          res.on('data', (chunk) => sseChunks.push(chunk.toString()));
+        },
+      );
 
-      // 4. Spectator submits a cheer via HTTP POST
-      const cheerRes = await fetch(`http://localhost:${port}/api/session/cheer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: sessionToken,
-          pin: '5555',
-          senderName: 'Marta',
-          presetId: 'STRONG',
-          body: '¡Fuerza en las subidas!',
-        }),
-      });
-      assert.equal(cheerRes.status, 200);
+      try {
+        await new Promise((r) => setTimeout(r, 50));
 
-      // 5. Next telemetry POST from Android should receive the pending cheer in response!
-      const telem2Res = await fetch(`http://localhost:${port}/api/gateway/telemetry`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: sessionToken,
-          sessionId: sessionToken,
-          seq: 2,
-          timestamp: Date.now(),
-          metrics: { heartRateBpm: 161, speedMps: 3.7 },
-        }),
-      });
-      assert.equal(telem2Res.status, 200);
-      const telem2Json = await telem2Res.json();
-      assert.equal(telem2Json.status, 'OK');
-      assert.equal(telem2Json.pendingCheers.length, 1);
-      assert.equal(telem2Json.pendingCheers[0].senderName, 'Marta');
-      assert.equal(telem2Json.pendingCheers[0].body, '¡Fuerza en las subidas!');
+        // 3. Upload telemetry via HTTP POST
+        const telemRes = await fetch(`http://localhost:${port}/api/gateway/telemetry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: sessionToken,
+            sessionId: sessionToken,
+            seq: 1,
+            timestamp: Date.now(),
+            metrics: { heartRateBpm: 158, speedMps: 3.6 },
+            coordinates: { lat: 40.4168, lng: -3.7038 },
+          }),
+        });
+        assert.equal(telemRes.status, 200);
+        const telemJson = await telemRes.json();
+        assert.equal(telemJson.status, 'OK');
+        assert.deepEqual(telemJson.pendingCheers, []);
 
-      // 6. Complete session via HTTP POST
-      const compRes = await fetch(`http://localhost:${port}/api/gateway/session/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: sessionToken, status: 'COMPLETED' }),
-      });
-      assert.equal(compRes.status, 200);
+        await new Promise((r) => setTimeout(r, 50));
+        assert.ok(sseChunks.some((c) => c.includes('TELEMETRY_SNAPSHOT')));
 
-      await new Promise((r) => setTimeout(r, 50));
-      assert.ok(sseChunks.some((c) => c.includes('COMPLETED')));
-    } finally {
-      sseReq.destroy();
-    }
-  });
+        // 4. Spectator submits a cheer via HTTP POST
+        const cheerRes = await fetch(`http://localhost:${port}/api/session/cheer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: sessionToken,
+            pin: '5555',
+            senderName: 'Marta',
+            presetId: 'STRONG',
+            body: '¡Fuerza en las subidas!',
+          }),
+        });
+        assert.equal(cheerRes.status, 200);
+
+        // 5. Next telemetry POST from Android should receive the pending cheer in response!
+        const telem2Res = await fetch(`http://localhost:${port}/api/gateway/telemetry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: sessionToken,
+            sessionId: sessionToken,
+            seq: 2,
+            timestamp: Date.now(),
+            metrics: { heartRateBpm: 161, speedMps: 3.7 },
+          }),
+        });
+        assert.equal(telem2Res.status, 200);
+        const telem2Json = await telem2Res.json();
+        assert.equal(telem2Json.status, 'OK');
+        assert.equal(telem2Json.pendingCheers.length, 1);
+        assert.equal(telem2Json.pendingCheers[0].senderName, 'Marta');
+        assert.equal(telem2Json.pendingCheers[0].body, '¡Fuerza en las subidas!');
+
+        // 6. Complete session via HTTP POST
+        const compRes = await fetch(`http://localhost:${port}/api/gateway/session/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sessionToken, status: 'COMPLETED' }),
+        });
+        assert.equal(compRes.status, 200);
+
+        await new Promise((r) => setTimeout(r, 50));
+        assert.ok(sseChunks.some((c) => c.includes('COMPLETED')));
+      } finally {
+        sseReq.destroy();
+      }
+    },
+  );
 });

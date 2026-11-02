@@ -89,26 +89,26 @@ void test('WebSocket Relay Server: Room management and Spectator PIN rate limiti
 
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const port = (server.address() as { port: number }).port;
-t.after(() => {
-  relay.close();
-  for (const client of wss.clients) {
-    try {
-      client.removeAllListeners();
-      client.terminate();
-    } catch {}
-  }
-  try {
-    if (typeof server.closeAllConnections === 'function') {
-      server.closeAllConnections();
+  t.after(() => {
+    relay.close();
+    for (const client of wss.clients) {
+      try {
+        client.removeAllListeners();
+        client.terminate();
+      } catch {}
     }
-  } catch {}
-  try {
-    wss.close();
-  } catch {}
-  try {
-    server.close();
-  } catch {}
-});
+    try {
+      if (typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
+    } catch {}
+    try {
+      wss.close();
+    } catch {}
+    try {
+      server.close();
+    } catch {}
+  });
 
   await t.test('Gateway registers session with PIN', async () => {
     const { ws, ack } = await registerGateway(port, 'token-123', '4829');

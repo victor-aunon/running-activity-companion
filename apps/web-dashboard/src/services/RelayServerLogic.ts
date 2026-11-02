@@ -69,7 +69,9 @@ function safeSend(ws: WebSocket | null | undefined, payload: string) {
       }
     });
   } catch (err) {
-    relayWarn(`⚠️ [RELAY] Excepción en socket send: ${err instanceof Error ? err.message : String(err)}`);
+    relayWarn(
+      `⚠️ [RELAY] Excepción en socket send: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -257,7 +259,8 @@ function handleDispatchCheer(
         JSON.stringify({
           type: 'ERROR',
           code: 'PIN_RATE_LIMITED',
-          message: result.message || 'Demasiados intentos fallidos de PIN. Bloqueado temporalmente.',
+          message:
+            result.message || 'Demasiados intentos fallidos de PIN. Bloqueado temporalmente.',
         }),
       );
     } else {
@@ -542,7 +545,7 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
   const rooms = new Map<string, RoomSession>();
   const clientRateLimits = new WeakMap<WebSocket, RateLimitTracker>();
   const httpRateLimits = new Map<string, RateLimitTracker>();
-  isSilent = options.silent ?? (process.env.NODE_ENV === 'test');
+  isSilent = options.silent ?? process.env.NODE_ENV === 'test';
   const verbose = options.verbose === true;
 
   function getOrCreateRoom(rawToken: string): RoomSession {
@@ -606,8 +609,8 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         token: room.token,
         sessionId: room.sessionId,
         spectatorPin: room.spectatorPin,
-        hasGateway: !!room.gatewayWs || (room.lastTelemetry !== undefined),
-        gatewayReadyState: room.gatewayWs ? room.gatewayWs.readyState : (room.lastTelemetry ? 1 : 0),
+        hasGateway: !!room.gatewayWs || room.lastTelemetry !== undefined,
+        gatewayReadyState: room.gatewayWs ? room.gatewayWs.readyState : room.lastTelemetry ? 1 : 0,
         spectatorsCount: room.spectators.size + (room.sseSpectators?.size || 0),
         pathHistoryLength: room.pathHistory?.length || 0,
         hasLastTelemetry: !!room.lastTelemetry,
@@ -722,8 +725,8 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
       const result: Record<string, any> = {};
       for (const [k, r] of rooms.entries()) {
         result[k] = {
-          hasGateway: !!r.gatewayWs || (r.lastTelemetry !== undefined),
-          gatewayReadyState: r.gatewayWs ? r.gatewayWs.readyState : (r.lastTelemetry ? 1 : 0),
+          hasGateway: !!r.gatewayWs || r.lastTelemetry !== undefined,
+          gatewayReadyState: r.gatewayWs ? r.gatewayWs.readyState : r.lastTelemetry ? 1 : 0,
           spectators: r.spectators.size + (r.sseSpectators?.size || 0),
           pathLength: r.pathHistory?.length || 0,
         };
