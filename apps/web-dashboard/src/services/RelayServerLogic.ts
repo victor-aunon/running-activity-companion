@@ -278,6 +278,10 @@ function handleDispatchCheer(
 
 function appendPathHistory(room: RoomSession, coords: any) {
   if (!coords?.lat || !coords?.lng) return;
+  const last = room.pathHistory[room.pathHistory.length - 1];
+  if (last && last[0] === coords.lat && last[1] === coords.lng) {
+    return;
+  }
   room.pathHistory.push([coords.lat, coords.lng]);
   if (room.pathHistory.length > 5000) {
     room.pathHistory.shift();
@@ -309,7 +313,10 @@ function handleTelemetrySnapshot(room: RoomSession, msg: any) {
       msg.metrics.totalRaceDistanceM = room.raceDistanceM;
     }
   }
-  room.lastTelemetry = msg;
+  const currentSeq = (room.lastTelemetry as any)?.seq;
+  if (currentSeq == null || msg.seq == null || msg.seq >= currentSeq) {
+    room.lastTelemetry = msg;
+  }
   appendPathHistory(room, msg.coordinates);
   logTelemetryStats(room, msg.seq, msg.metrics);
   broadcastToSpectators(room, JSON.stringify(msg));

@@ -3,6 +3,7 @@ package com.runningsupport.companion.network
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -36,11 +38,7 @@ class WebSocketGatewayClient(
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    private val httpBaseUrl = serverUrl
-        .replaceFirst("^wss://".toRegex(RegexOption.IGNORE_CASE), "https://")
-        .replaceFirst("^ws://".toRegex(RegexOption.IGNORE_CASE), "http://")
-        .replace("/api/ws/session", "")
-        .trimEnd('/')
+    private val httpBaseUrl = resolveHttpBaseUrl(serverUrl)
 
     @Volatile
     private var isConnected = false
@@ -99,7 +97,14 @@ class WebSocketGatewayClient(
                                 val err = "HTTP ${resp.code} ${resp.message}"
                                 _connectionError.value = err
                                 _connectionState.tryEmit(false)
-                                Log.w(TAG, "Failed to register gateway HTTP session: $err")
+                                Log.w(TAG, "Failed to register gateway HTTP session: $err. Retrying in 3s...")
+                                if (shouldReconnect) {
+                                    reconnectJob?.cancel()
+                                    reconnectJob = scope.launch {
+                                        delay(3000)
+                                        if (shouldReconnect) connect()
+                                    }
+                                }
                             }
                         }
                     }
@@ -150,19 +155,7 @@ class WebSocketGatewayClient(
 
                             val respStr = resp.body?.string()
                             if (!respStr.isNullOrBlank()) {
-                                try {
-                                    val respJson = JSONObject(respStr)
-                                    val pendingCheers = respJson.optJSONArray("pendingCheers")
-                                    if (pendingCheers != null && pendingCheers.length() > 0) {
-                                        for (i in 0 until pendingCheers.length()) {
-                                            val cheer = pendingCheers.getJSONObject(i)
-                                            _incomingCheers.tryEmit(cheer)
-                                            Log.i(TAG, "Incoming cheer delivered to watch: ${cheer.optString("body")}")
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error parsing gateway response: ${e.message}")
-                                }
+                                processPendingCheers(respStr)
                             }
                         } else {
                             Log.w(TAG, "Gateway HTTP send error: HTTP ${resp.code}")
@@ -174,6 +167,68 @@ class WebSocketGatewayClient(
         } catch (e: Exception) {
             Log.w(TAG, "Gateway HTTP network error: ${e.message}")
             return false
+        }
+    }
+
+    private fun sendSync(payload: JSONObject): Boolean {
+        if (!payload.has("token")) {
+            payload.put("token", token)
+        }
+        if (!payload.has("sessionId")) {
+            payload.put("sessionId", sessionId)
+        }
+        val type = payload.optString("type")
+        val endpoint = when (type) {
+            "NOW_PLAYING_UPDATE" -> "$httpBaseUrl/api/gateway/now-playing"
+            "SESSION_STATE_CHANGED" -> "$httpBaseUrl/api/gateway/session/complete"
+            "CHEER_STATUS_UPDATE" -> "$httpBaseUrl/api/gateway/cheer-ack"
+            else -> "$httpBaseUrl/api/gateway/telemetry"
+        }
+
+        return try {
+            val body = payload.toString().toRequestBody(jsonMediaType)
+            val req = Request.Builder()
+                .url(endpoint)
+                .post(body)
+                .build()
+
+            client.newCall(req).execute().use { response ->
+                if (response.isSuccessful) {
+                    if (!isConnected) {
+                        isConnected = true
+                        _connectionState.tryEmit(true)
+                    }
+                    _connectionError.value = null
+
+                    val respStr = response.body?.string()
+                    if (!respStr.isNullOrBlank()) {
+                        processPendingCheers(respStr)
+                    }
+                    true
+                } else {
+                    Log.w(TAG, "Gateway HTTP sync upload error: HTTP ${response.code}")
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Gateway HTTP sync network error: ${e.message}")
+            false
+        }
+    }
+
+    private fun processPendingCheers(respStr: String) {
+        try {
+            val respJson = JSONObject(respStr)
+            val pendingCheers = respJson.optJSONArray("pendingCheers")
+            if (pendingCheers != null && pendingCheers.length() > 0) {
+                for (i in 0 until pendingCheers.length()) {
+                    val cheer = pendingCheers.getJSONObject(i)
+                    _incomingCheers.tryEmit(cheer)
+                    Log.i(TAG, "Incoming cheer delivered to watch: ${cheer.optString("body")}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing gateway cheer response: ${e.message}")
         }
     }
 
@@ -227,24 +282,28 @@ class WebSocketGatewayClient(
     ) {
         if (!isConnected) return
 
-        while (isConnected) {
-            val batch = fetchBatch(sessionId, 50)
-            if (batch.isEmpty()) break
+        withContext(Dispatchers.IO) {
+            while (isConnected) {
+                val batch = fetchBatch(sessionId, 50)
+                if (batch.isEmpty()) break
 
-            val syncedIds = mutableListOf<Long>()
-            for ((id, json) in batch) {
-                if (send(json)) {
-                    syncedIds.add(id)
+                val syncedIds = mutableListOf<Long>()
+                for ((id, json) in batch) {
+                    if (!isConnected) break
+                    if (sendSync(json)) {
+                        syncedIds.add(id)
+                    } else {
+                        // Preserves unconfirmed records in Room DB for next retry
+                        break
+                    }
+                }
+
+                if (syncedIds.isNotEmpty()) {
+                    markSynced(syncedIds)
                 } else {
+                    delay(1000)
                     break
                 }
-            }
-
-            if (syncedIds.isNotEmpty()) {
-                markSynced(syncedIds)
-            } else {
-                delay(1000)
-                break
             }
         }
     }
@@ -253,7 +312,7 @@ class WebSocketGatewayClient(
         shouldReconnect = false
         reconnectJob?.cancel()
         reconnectJob = null
-        scope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 val completePayload = JSONObject().apply {
                     put("token", token)
@@ -264,10 +323,7 @@ class WebSocketGatewayClient(
                     .url("$httpBaseUrl/api/gateway/session/complete")
                     .post(body)
                     .build()
-                client.newCall(req).enqueue(object : Callback {
-                    override fun onFailure(call: Call, e: IOException) {}
-                    override fun onResponse(call: Call, response: Response) { response.close() }
-                })
+                client.newCall(req).execute().close()
             } catch (_: Exception) {}
         }
         isConnected = false
@@ -276,5 +332,23 @@ class WebSocketGatewayClient(
 
     companion object {
         private const val TAG = "WebSocketGatewayClient"
+
+        private fun resolveHttpBaseUrl(rawUrl: String): String {
+            var url = rawUrl.trim()
+            if (url.startsWith("wss://", ignoreCase = true)) {
+                url = "https://" + url.substring(6)
+            } else if (url.startsWith("ws://", ignoreCase = true)) {
+                url = "http://" + url.substring(5)
+            }
+            val queryIdx = url.indexOf('?')
+            if (queryIdx != -1) {
+                url = url.substring(0, queryIdx)
+            }
+            val wsIdx = url.indexOf("/api/ws/session")
+            if (wsIdx != -1) {
+                url = url.substring(0, wsIdx)
+            }
+            return url.trimEnd('/')
+        }
     }
 }
