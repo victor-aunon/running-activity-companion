@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Map, Layers, Target, TrendingUp, Plus, Minus, Compass } from 'lucide-react';
 import { formatElapsedTime } from './HeaderTile';
+import { renderKilometerMarkers } from '../../utils/mapMarkers';
 
 export interface MapTileProps {
   currentLat?: number;
@@ -49,14 +50,20 @@ function initLeafletMap(L: any, params: LeafletInitParams) {
     iconSize: [22, 22],
     iconAnchor: [11, 11],
   });
-  const marker = L.marker([params.lat, params.lng], { icon: runnerIcon }).addTo(map);
+  const marker = L.marker([params.lat, params.lng], { icon: runnerIcon, zIndexOffset: 1000 }).addTo(
+    map,
+  );
   const polyline = L.polyline(params.path, {
     color: '#ea580c',
     weight: 5,
     opacity: 0.9,
     smoothFactor: 1,
   }).addTo(map);
-  return { map, marker, polyline, streetLayer, satelliteLayer };
+
+  const kmMarkersLayer = L.layerGroup().addTo(map);
+  renderKilometerMarkers(L, kmMarkersLayer, params.path);
+
+  return { map, marker, polyline, streetLayer, satelliteLayer, kmMarkersLayer, L };
 }
 
 interface LeafletHookParams {
@@ -80,13 +87,16 @@ function switchMapLayer(map: any, streetLayer: any, satelliteLayer: any, enableS
 }
 
 function updateLeafletEntities(
-  inst: { marker: any; map: any; polyline: any } | null,
+  inst: { marker: any; map: any; polyline: any; kmMarkersLayer?: any; L?: any } | null,
   params: LeafletHookParams,
 ) {
   if (!inst) return;
   inst.marker?.setLatLng([params.lat, params.lng]);
   if (!params.isDegraded) {
     inst.polyline?.setLatLngs(params.path);
+    if (inst.L && inst.kmMarkersLayer) {
+      renderKilometerMarkers(inst.L, inst.kmMarkersLayer, params.path);
+    }
   }
   if (params.isFollowing) {
     inst.map?.panTo([params.lat, params.lng], { animate: true, duration: 0.8 });
@@ -122,6 +132,8 @@ function useLeafletInstance(params: LeafletHookParams) {
     polyline: any;
     streetLayer: any;
     satelliteLayer: any;
+    kmMarkersLayer: any;
+    L: any;
   } | null>(null);
 
   useEffect(() => {
