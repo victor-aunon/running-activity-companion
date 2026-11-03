@@ -10,6 +10,7 @@ import { useSpectatorNotifications } from './useSpectatorNotifications';
 import { resolveTotalRaceDistance } from './useSpectatorNotificationsLogic';
 import { getRequiredAthleteName } from '../utils/athlete';
 import { formatElevationProfile } from '../utils/formatters';
+import type { DashboardRuntimeConfig } from '../utils/runtimeConfig';
 import { MOCK_STITCH_FIXTURE, MOCK_STITCH_NOW_PLAYING_IDLE } from '../fixtures/stitchVisualMock';
 import type { TelemetrySnapshotPacket, CheerPreset } from '@running-support/shared-contracts';
 
@@ -153,11 +154,15 @@ function useSessionClientAndState(
   };
 }
 
-export function useDashboardSession(token: string, explicitAthleteName?: string) {
+export function useDashboardSession(
+  token: string,
+  explicitAthleteName?: string,
+  runtimeConfig?: DashboardRuntimeConfig,
+) {
   const searchParams = useSearchParams();
   const mockFixture = getInitialFixture(searchParams);
   const init = resolveInnerDashboardParams(mockFixture, searchParams.get('pin'));
-  const athlete = resolveAthleteName(mockFixture, explicitAthleteName);
+  const athlete = resolveAthleteName(mockFixture, explicitAthleteName || runtimeConfig?.athleteName);
   const {
     telemetry,
     spectator,
@@ -167,7 +172,7 @@ export function useDashboardSession(token: string, explicitAthleteName?: string)
     setSelectedPresetId,
   } = useSessionClientAndState(token, init);
 
-  const { maxHeartRateBpm, resolveZone } = useEffortZones();
+  const { maxHeartRateBpm, resolveZone } = useEffortZones(runtimeConfig?.effortZones);
   const vm = extractViewMetrics(telemetry.telemetry, telemetry.sessionStatus);
   const { live, gpsLocality } = useDashboardEtaAndLocality(
     vm,
@@ -181,6 +186,8 @@ export function useDashboardSession(token: string, explicitAthleteName?: string)
   const notifications = useSpectatorNotifications({
     telemetry: telemetry.telemetry,
     athleteName: athlete,
+    thresholds: runtimeConfig?.notificationThresholds,
+    defaultRaceDistanceM: runtimeConfig?.defaultRaceDistanceM,
     onSelectPreset: setSelectedPresetId,
   });
 
@@ -202,5 +209,6 @@ export function useDashboardSession(token: string, explicitAthleteName?: string)
     isUnauthorized: telemetry.isUnauthorized,
     notifications,
     selectedPresetId,
+    runtimeConfig,
   };
 }

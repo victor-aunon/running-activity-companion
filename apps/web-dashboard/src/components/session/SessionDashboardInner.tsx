@@ -1,18 +1,26 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useDashboardSession } from '../../hooks/useDashboardSession';
 import { UnauthorizedAccessCard } from './UnauthorizedAccessCard';
 import { DashboardLayout } from './DashboardLayout';
+import { registerDashboardServiceWorker } from '../../utils/serviceWorkerRegistration';
+import type { DashboardRuntimeConfig } from '../../utils/runtimeConfig';
 
 export function SessionDashboardInner({
   token,
   athleteName,
+  runtimeConfig,
 }: {
   token: string;
   athleteName?: string;
+  runtimeConfig?: DashboardRuntimeConfig;
 }) {
-  const session = useDashboardSession(token, athleteName);
+  useEffect(() => {
+    void registerDashboardServiceWorker();
+  }, []);
+
+  const session = useDashboardSession(token, athleteName, runtimeConfig);
   const onRefresh = session.client
     ? () => {
         session.client?.disconnect();
@@ -44,6 +52,7 @@ export function SessionDashboardInner({
       displayPin={session.activePin}
       notifications={session.notifications}
       selectedPresetId={session.selectedPresetId}
+      runtimeConfig={runtimeConfig}
     />
   );
 }

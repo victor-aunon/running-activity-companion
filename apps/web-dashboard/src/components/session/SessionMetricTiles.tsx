@@ -1,6 +1,10 @@
 import React from 'react';
 import { MetricTile, formatPace, formatDistanceKm } from '../bento/MetricTile';
-import { formatPaceDifference, resolveCadenceZone } from '../../utils/formatters';
+import {
+  formatPaceDifference,
+  resolveCadenceZone,
+  resolveHeartRateBadgeClasses,
+} from '../../utils/formatters';
 import type { RunningMetrics } from '@running-support/shared-contracts';
 import type { HeartRateZoneResult } from '../../types/telemetry';
 import { Gauge, Heart, Flag, Footprints } from 'lucide-react';
@@ -40,9 +44,7 @@ export function HeartRateMetricFooter({
   }
   return (
     <>
-      <span className="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-        {zoneInfo.name}
-      </span>
+      <span className={resolveHeartRateBadgeClasses(zoneInfo)}>{zoneInfo.name}</span>
       <span className="text-slate-500 font-semibold">
         {maxHeartRateBpm ? `Máx ${maxHeartRateBpm}` : `Zona ${zoneInfo.zone}`}
       </span>

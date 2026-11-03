@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { EffortZoneConfig, HeartRateZoneResult } from '../types/telemetry';
+export type { EffortZoneConfig, HeartRateZoneResult };
 
 export const DEFAULT_EFFORT_ZONES: EffortZoneConfig = {
   zone1Max: 130,
@@ -99,8 +100,9 @@ export function resolveHeartRateZone(
   };
 }
 
-export function useEffortZones() {
+export function useEffortZones(initialConfig?: EffortZoneConfig) {
   const config = useMemo(() => {
+    if (initialConfig) return initialConfig;
     return parseEffortZones({
       NEXT_PUBLIC_ZONE_1_MAX: process.env.NEXT_PUBLIC_ZONE_1_MAX,
       NEXT_PUBLIC_ZONE_2_MAX: process.env.NEXT_PUBLIC_ZONE_2_MAX,
@@ -108,14 +110,15 @@ export function useEffortZones() {
       NEXT_PUBLIC_ZONE_4_MAX: process.env.NEXT_PUBLIC_ZONE_4_MAX,
       NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX,
     });
-  }, []);
+  }, [initialConfig]);
 
   const maxHeartRateBpm = useMemo(() => {
+    if (initialConfig?.zone5Max) return initialConfig.zone5Max;
     return resolveMaxHeartRate(
       { NEXT_PUBLIC_ZONE_5_MAX: process.env.NEXT_PUBLIC_ZONE_5_MAX },
       config,
     );
-  }, [config]);
+  }, [config, initialConfig]);
 
   return {
     config,

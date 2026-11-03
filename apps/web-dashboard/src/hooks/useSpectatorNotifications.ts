@@ -17,6 +17,7 @@ import {
 import { executeCtaScrollAndPreset } from '../components/ui/NotificationSnackbarLogic';
 import { playNotificationSound } from '../utils/notificationAudio';
 import { getRequiredAthleteName } from '../utils/athlete';
+import { dispatchBrowserNotification } from '../utils/browserNotificationDispatcher';
 
 export interface UseSpectatorNotificationsOptions {
   telemetry: TelemetrySnapshotPacket | null;
@@ -24,23 +25,7 @@ export interface UseSpectatorNotificationsOptions {
   thresholds?: Partial<NotificationThresholdsConfig>;
   hrExertionThreshold?: number;
   onSelectPreset?: (preset: CheerPreset) => void;
-}
-
-function fireBrowserNotification(notif: SpectatorNotification) {
-  if (
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    Notification.permission === 'granted'
-  ) {
-    try {
-      new Notification(notif.title, {
-        body: notif.message,
-        icon: '/icon.svg',
-      });
-    } catch {
-      // Ignore background or blocked notification exceptions
-    }
-  }
+  defaultRaceDistanceM?: number;
 }
 
 function useActiveThresholds(
@@ -86,6 +71,7 @@ export function useSpectatorNotifications({
   thresholds,
   hrExertionThreshold,
   onSelectPreset,
+  defaultRaceDistanceM,
 }: UseSpectatorNotificationsOptions) {
   const resolvedAthlete = getRequiredAthleteName(athleteName);
   const [snackbars, setSnackbars] = useState<SpectatorNotification[]>([]);
@@ -116,18 +102,19 @@ export function useSpectatorNotifications({
       {
         athleteName: resolvedAthlete,
         now: Date.now(),
-        envDefaultRaceDistance: process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
+        envDefaultRaceDistance:
+          defaultRaceDistanceM ?? process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
       },
     );
     engineRef.current = nextEngine;
     if (newAlerts.length > 0) {
       setSnackbars((prev) => [...prev, ...newAlerts]);
       newAlerts.forEach((alert) => {
-        fireBrowserNotification(alert);
+        void dispatchBrowserNotification(alert);
         playNotificationSound(alert.type);
       });
     }
-  }, [telemetry, resolvedAthlete, activeThresholds]);
+  }, [telemetry, resolvedAthlete, activeThresholds, defaultRaceDistanceM]);
 
   return { snackbars, dismissSnackbar, handleCtaClick };
 }

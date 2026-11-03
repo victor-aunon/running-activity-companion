@@ -24,7 +24,8 @@ function resolveDefaultWsUrl(wsUrl?: string): string {
     typeof window !== 'undefined' &&
     window.location.port === '3000'
   ) {
-    return 'ws://localhost:3001/api/ws/session';
+    const host = window.location.hostname || 'localhost';
+    return `ws://${host}:3001/api/ws/session`;
   }
   return '/api/ws/session';
 }
@@ -94,8 +95,14 @@ export function useLiveTelemetry({
 
   useEffect(() => {
     if (!token) return;
+    setIsUnauthorized(false);
+    const url = resolveDefaultWsUrl(wsUrl);
+    const newClient = new WebSocketClient({ url, token, role: 'spectator', pin });
+    setClient(newClient);
+
     if (typeof window !== 'undefined') {
-      fetch(`/api/session/path?token=${encodeURIComponent(token)}`)
+      const httpOrigin = newClient.resolveHttpOrigin();
+      fetch(`${httpOrigin}/api/session/path?token=${encodeURIComponent(token)}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.coordinates && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
@@ -104,11 +111,6 @@ export function useLiveTelemetry({
         })
         .catch(() => {});
     }
-
-    setIsUnauthorized(false);
-    const url = resolveDefaultWsUrl(wsUrl);
-    const newClient = new WebSocketClient({ url, token, role: 'spectator', pin });
-    setClient(newClient);
 
     const unsubscribeState = newClient.onStateChange((s) => state.setConnectionState(s));
     const unsubscribeMsg = newClient.onMessage((msg) => {

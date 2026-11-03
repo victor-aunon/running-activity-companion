@@ -84,6 +84,22 @@ export class WebSocketClient {
     }
   }
 
+  public resolveHttpOrigin(): string {
+    if (typeof window === 'undefined') return '';
+    try {
+      if (this.options.url) {
+        const base = this.options.url.startsWith('ws')
+          ? this.options.url.replace(/^ws/, 'http')
+          : this.options.url;
+        const parsed = new URL(base, window.location.origin);
+        return parsed.origin;
+      }
+    } catch {
+      // Fallback to window.location.origin
+    }
+    return window.location.origin;
+  }
+
   private buildWsUrl(): string {
     const wsUrl = new URL(this.options.url, window.location.origin.replace(/^http/, 'ws'));
     wsUrl.searchParams.set('token', this.options.token);
@@ -110,7 +126,7 @@ export class WebSocketClient {
 
   private connectSse(): void {
     try {
-      const sseUrl = new URL('/api/session/stream', window.location.origin);
+      const sseUrl = new URL('/api/session/stream', this.resolveHttpOrigin());
       sseUrl.searchParams.set('token', this.options.token);
       if (this.options.pin) {
         sseUrl.searchParams.set('pin', this.options.pin);
@@ -224,7 +240,7 @@ export class WebSocketClient {
           pin: this.options.pin,
           ...message,
         };
-        fetch('/api/session/cheer', {
+        fetch(`${this.resolveHttpOrigin()}/api/session/cheer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

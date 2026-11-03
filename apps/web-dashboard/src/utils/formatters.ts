@@ -2,6 +2,7 @@
  * Pure domain & presentation formatters for telemetry metrics
  * Provides clean, truthful fallbacks when live streaming data is absent
  */
+import type { HeartRateZoneResult } from '../types/telemetry.ts';
 
 export function formatPace(paceSecPerKm?: number | null): string {
   if (
@@ -265,4 +266,9 @@ export function formatElevationProfile(
   }
   const cur = curEle ? ` (Actual: ${Math.round(curEle)}m)` : '';
   return `Perfil de Elevación: +${Math.round(gain)}m / -${Math.round(loss)}m${cur}`;
+}
+
+export function resolveHeartRateBadgeClasses(zoneInfo: HeartRateZoneResult | null): string {
+  if (!zoneInfo) return '';
+  return `px-2 py-0.5 rounded-lg text-[11px] font-bold border ${zoneInfo.badgeClass}`;
 }

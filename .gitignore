@@ -48,6 +48,9 @@ dist/
 # Next.js & Turbopack cache
 .turbo/
 .tsbuildinfo
+*.tsbuildinfo
+.codegraph/*
+!.codegraph/.gitignore
 next-env.d.ts
 
 # Environment variables (Never commit sensitive keys or local overrides)

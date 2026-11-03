@@ -13,6 +13,7 @@ import type { useNowPlaying } from '../../hooks/useNowPlaying';
 import type { useSpectatorNotifications } from '../../hooks/useSpectatorNotifications';
 import type { HeartRateZoneResult } from '../../types/telemetry';
 import type { CheerPreset } from '@running-support/shared-contracts';
+import type { DashboardRuntimeConfig } from '../../utils/runtimeConfig';
 
 export interface DashboardLayoutProps {
   vm: ReturnType<typeof extractViewMetrics>;
@@ -33,25 +34,32 @@ export interface DashboardLayoutProps {
   displayPin?: string;
   notifications?: ReturnType<typeof useSpectatorNotifications>;
   selectedPresetId?: CheerPreset | null;
+  runtimeConfig?: DashboardRuntimeConfig;
 }
 
-function resolveTargetDistanceKm(totalDistanceM?: number): number | undefined {
+function resolveTargetDistanceKm(
+  totalDistanceM?: number,
+  fallbackRaceDistanceM?: number,
+): number | undefined {
   const totalM = resolveTotalRaceDistance(
     totalDistanceM,
-    process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
+    fallbackRaceDistanceM ?? process.env.NEXT_PUBLIC_DEFAULT_RACE_DISTANCE_M,
   );
   return totalM > 0 ? Number((totalM / 1000).toFixed(1)) : undefined;
 }
 
-function resolveMaxHr(explicitMax?: number): number | undefined {
+function resolveMaxHr(explicitMax?: number, fallbackMax?: number): number | undefined {
   if (explicitMax !== undefined) return explicitMax;
+  if (fallbackMax !== undefined) return fallbackMax;
   const envMax = process.env.NEXT_PUBLIC_ZONE_5_MAX;
   return envMax ? Number(envMax) : undefined;
 }
 
 function resolveMainDashboardProps(props: DashboardLayoutProps): MainDashboardProps {
   const cfg: Partial<FixtureConfig> = props.config || {};
-  const fallbackPace = parseTargetPace(process.env.NEXT_PUBLIC_TARGET_PACE) ?? 270;
+  const fallbackPace =
+    props.runtimeConfig?.targetPaceSecPerKm ??
+    (parseTargetPace(process.env.NEXT_PUBLIC_TARGET_PACE) ?? 270);
   const targetPace = props.vm.metrics?.targetPaceSecPerKm || fallbackPace;
 
   return {
@@ -60,14 +68,22 @@ function resolveMainDashboardProps(props: DashboardLayoutProps): MainDashboardPr
     pathCoordinates: props.pathCoordinates,
     spectator: props.spectator,
     nowPlaying: props.nowPlaying,
-    targetDistanceKm: resolveTargetDistanceKm(props.vm.metrics?.totalRaceDistanceM),
+    targetDistanceKm: resolveTargetDistanceKm(
+      props.vm.metrics?.totalRaceDistanceM,
+      props.runtimeConfig?.defaultRaceDistanceM,
+    ),
     targetPaceSecPerKm: targetPace,
-    maxHeartRateBpm: resolveMaxHr(props.maxHeartRateBpm),
+    maxHeartRateBpm: resolveMaxHr(
+      props.maxHeartRateBpm,
+      props.runtimeConfig?.effortZones?.zone5Max,
+    ),
     routeName: cfg.routeName,
     elevationText: props.elevationText || cfg.elevationProfileText,
     eta: props.eta || cfg.eta,
     spectatorCount: cfg.spectatorCount,
-    athleteName: getRequiredAthleteName(cfg.athleteName || props.athleteName),
+    athleteName: getRequiredAthleteName(
+      cfg.athleteName || props.athleteName || props.runtimeConfig?.athleteName,
+    ),
     selectedPresetId: props.selectedPresetId,
   };
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ActionButton } from '../ui/button';
 import { Flame, KeyRound, ArrowRight } from 'lucide-react';
 import { requestNotificationPermissionUpfront } from '../../utils/notificationPermissions';
+import { registerDashboardServiceWorker } from '../../utils/serviceWorkerRegistration';
 import { getRequiredAthleteName, getDefaultSessionToken } from '../../utils/athlete';
 
 export function LandingHeader({ athleteName }: { athleteName?: string }) {
@@ -171,6 +172,7 @@ export function useSessionVerifier(initialAthleteName?: string) {
       }
 
       await requestNotificationPermissionUpfront();
+      await registerDashboardServiceWorker();
       router.push(`/session/${encodeURIComponent(cleanToken)}?pin=${encodeURIComponent(cleanPin)}`);
     } catch {
       setError('No se pudo verificar el PIN con el servidor. Comprueba la conexión.');

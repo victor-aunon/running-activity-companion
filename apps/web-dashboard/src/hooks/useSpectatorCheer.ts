@@ -10,6 +10,7 @@ import type {
 } from '@running-support/shared-contracts';
 import type { WebSocketClient } from '../services/WebSocketClient';
 import type { CheerItem } from '../types/cheer';
+import { safeRandomUUID } from '../utils/crypto';
 
 export interface UseSpectatorCheerOptions {
   client?: WebSocketClient | null;
@@ -111,7 +112,7 @@ function sendCheerPacket(
 ): { success: boolean; notificationId?: string } {
   const { client, sessionId, pin, senderName } = params;
   if (!client || !sessionId) return { success: false };
-  const notificationId = crypto.randomUUID();
+  const notificationId = safeRandomUUID();
   const displayName = senderName.trim();
   const command = {
     type: 'DISPATCH_CHEER' as const,
