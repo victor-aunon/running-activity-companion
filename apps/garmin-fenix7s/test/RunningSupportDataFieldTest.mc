@@ -75,6 +75,12 @@ class RunningSupportDataFieldTest {
         var activeMetrics = activePayload.get("metrics") as Lang.Dictionary;
         Test.assertEqualMessage(activeMetrics.get("isTimerRunning"), true, "isTimerRunning must be true when timer is ON");
         Test.assertEqualMessage(activeMetrics.get("totalDistanceM"), 1500.0f, "totalDistanceM must be preserved when timer is ON");
+
+        info.timerState = Activity.TIMER_STATE_PAUSED;
+        var pausedPayload = field.buildTelemetryPayload(info);
+        var pausedMetrics = pausedPayload.get("metrics") as Lang.Dictionary;
+        Test.assertEqualMessage(pausedMetrics.get("isTimerRunning"), false, "isTimerRunning must be false when paused");
+        Test.assertEqualMessage(pausedMetrics.get("totalDistanceM"), 1500.0f, "totalDistanceM must be preserved when paused");
         return true;
     }
 }

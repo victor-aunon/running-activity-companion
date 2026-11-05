@@ -43,14 +43,23 @@ let cadenceOverride: number | null = null;
 let telemetryInterval: NodeJS.Timeout | null = null;
 const sessionId = '550e8400-e29b-41d4-a716-446655440000';
 
-function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number) {
-  const speedMps = 3.65 + Math.sin(curSeq / 10) * 0.2;
+const isAutoStart =
+  getArg('autoStart') === 'true' || args.includes('--start') || args.includes('--autoStart');
+let activityStarted = isAutoStart;
+let isTimerRunning = isAutoStart;
+
+function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number, timerRunning: boolean) {
+  const speedMps = timerRunning ? 3.65 + Math.sin(curSeq / 10) * 0.2 : 1.8 + Math.sin(curSeq / 10) * 0.2;
   const paceSecPerKm = 1000 / speedMps;
-  const baseHeartRate = Math.round(155 + Math.sin(curSeq / 8) * 12);
+  const baseHeartRate = timerRunning
+    ? Math.round(155 + Math.sin(curSeq / 8) * 12)
+    : Math.round(105 + Math.sin(curSeq / 8) * 8);
   const heartRate = heartRateOverride ?? baseHeartRate;
-  const baseCadence = Math.round(176 + Math.sin(curSeq / 5) * 4);
+  const baseCadence = timerRunning
+    ? Math.round(176 + Math.sin(curSeq / 5) * 4)
+    : Math.round(120 + Math.sin(curSeq / 5) * 5);
   const cadence = cadenceOverride ?? baseCadence;
-  const effectiveDistance = distance + distanceOffsetM;
+  const effectiveDistance = activityStarted ? distance + distanceOffsetM : 0.0;
   const angle = curSeq * 0.02;
   const lat = BASE_LAT + Math.sin(angle) * 0.005;
   const lng = BASE_LNG + Math.cos(angle) * 0.005;
@@ -74,6 +83,7 @@ function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number)
         totalDistanceM: Number(effectiveDistance.toFixed(1)),
         totalRaceDistanceM: TOTAL_RACE_DISTANCE_M,
         elapsedSeconds: elapsed,
+        isTimerRunning: timerRunning,
       },
       deviceHealth: {
         watchBatteryPct: Math.max(10, 92 - Math.floor(curSeq / 100)),
@@ -87,21 +97,25 @@ function buildTelemetryPacket(curSeq: number, elapsed: number, distance: number)
 function startTelemetryInterval(client: WebSocket) {
   telemetryInterval = setInterval(() => {
     seq++;
-    elapsedSeconds++;
     const { speedMps, paceSecPerKm, heartRate, packet } = buildTelemetryPacket(
       seq,
       elapsedSeconds,
       distanceM,
+      isTimerRunning,
     );
-    distanceM += speedMps;
+    if (isTimerRunning) {
+      elapsedSeconds++;
+      distanceM += speedMps;
+    }
     client.send(JSON.stringify(packet));
     if (seq % 5 === 0) {
       const min = Math.floor(paceSecPerKm / 60);
       const sec = Math.floor(paceSecPerKm % 60)
         .toString()
         .padStart(2, '0');
+      const timerStatus = isTimerRunning ? '⏱️ [EN CARRERA]' : '⏸️ [PRE-START]';
       console.log(
-        `[1Hz STREAM] Seq: ${seq} | HR: ${heartRate} bpm | Ritmo: ${min}:${sec} min/km | Dist: ${(distanceM / 1000).toFixed(2)} km`,
+        `${timerStatus} Seq: ${seq} | HR: ${heartRate} bpm | Ritmo: ${min}:${sec} min/km | Dist: ${(packet.metrics.totalDistanceM / 1000).toFixed(2)} km`,
       );
     }
   }, 1000);
@@ -140,11 +154,19 @@ ws.on('open', () => {
   console.log('✓ Sesión registrada exitosamente.');
   console.log('🚀 Emitiendo telemetría en vivo a 1 Hz (Pulsa Ctrl+C para detener)...');
   console.log('⌨️  Controles interactivos en tiempo real:');
-  console.log('   [k] Sumar +1 km a la distancia recorrida');
-  console.log('   [h] Alternar override de pulso alto (190 bpm)');
-  console.log('   [c] Alternar override de cadencia alta (210 spm)');
-  console.log('   [r] Enviar agradecimiento del corredor al último ánimo recibido');
-  console.log('   [f] Finalizar actividad (COMPLETED)\n');
+  console.log('   [s / Espacio] Simular botón START / PAUSA / REANUDAR del reloj Garmin');
+  console.log('   [k]           Sumar +1 km a la ruta y odómetro del reloj');
+  console.log('   [h]           Alternar override de pulso alto (190 bpm)');
+  console.log('   [c]           Alternar override de cadencia alta (210 spm)');
+  console.log('   [r]           Enviar agradecimiento del corredor al último ánimo recibido');
+  console.log('   [f]           Finalizar actividad (COMPLETED)\n');
+  if (!activityStarted) {
+    console.log('ℹ️  Estado inicial: PRE-START (reloj en pantalla de espera / calentando).');
+    console.log('   La posición GPS se emite en vivo, pero el cronómetro está en 0 y la distancia en 0.00 km.');
+    console.log('   👉 Pulsa [s] o [Espacio] para pulsar START en el reloj.\n');
+  } else {
+    console.log('ℹ️  Estado inicial: EN CARRERA (START activo desde el inicio).\n');
+  }
   startTelemetryInterval(ws);
 });
 
@@ -175,11 +197,43 @@ if (process.stdin.isTTY) {
       process.exit();
     }
     const char = key.toString().toLowerCase();
+    if (char === 's' || key.toString() === ' ') {
+      if (!activityStarted) {
+        activityStarted = true;
+        isTimerRunning = true;
+        console.log(
+          '\n▶️  [GARMIN START] ¡Botón START pulsado en el reloj! Cronómetro y odómetro oficial ACTIVADOS.',
+        );
+      } else {
+        isTimerRunning = !isTimerRunning;
+        if (isTimerRunning) {
+          console.log(
+            '\n▶️  [GARMIN REANUDAR] Cronómetro del reloj reanudado. Sumando distancia...',
+          );
+        } else {
+          console.log(
+            `\n⏸️  [GARMIN PAUSA] Cronómetro del reloj pausado. Distancia CONGELADA en ${((distanceM + distanceOffsetM) / 1000).toFixed(2)} km.`,
+          );
+        }
+      }
+    }
     if (char === 'k') {
-      distanceOffsetM += 1000;
-      console.log(
-        `⚡️ [ACCELERATION] +1 km añadido. Distancia simulada: ${((distanceM + distanceOffsetM) / 1000).toFixed(2)} km`,
-      );
+      if (!activityStarted) {
+        console.log(
+          '\n⚠️  [RELOJ EN PRE-START] El reloj aún no ha iniciado carrera. Pulsa [s] o [Espacio] para pulsar START primero.',
+        );
+      } else {
+        distanceOffsetM += 1000;
+        seq += 274;
+        if (isTimerRunning) {
+          elapsedSeconds += 274;
+        }
+        const { packet } = buildTelemetryPacket(seq, elapsedSeconds, distanceM, isTimerRunning);
+        ws.send(JSON.stringify(packet));
+        console.log(
+          `\n⚡️ [ACCELERATION +1 KM] Avanzado 1 km en ruta y odómetro del reloj. Distancia oficial: ${(packet.metrics.totalDistanceM / 1000).toFixed(2)} km`,
+        );
+      }
     }
     if (char === 'h') {
       if (heartRateOverride === 190) {

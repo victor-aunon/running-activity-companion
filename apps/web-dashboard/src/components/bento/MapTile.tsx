@@ -164,7 +164,7 @@ function useLeafletInstance(params: LeafletHookParams) {
 
   useEffect(() => {
     updateLeafletEntities(instancesRef.current, params);
-  }, [params.lat, params.lng, params.path, params.isDegraded, params.isFollowing]);
+  }, [params.lat, params.lng, params.path, params.kmMarkers, params.isDegraded, params.isFollowing]);
 
   return getMapControls(instancesRef, params);
 }

@@ -93,8 +93,12 @@ class RunningSupportDataField extends WatchUi.DataField {
         var timerState = (info has :timerState && info.timerState != null) ? info.timerState : Activity.TIMER_STATE_OFF;
         var isTimerRunning = (timerState == Activity.TIMER_STATE_ON);
 
-        var totalDistanceM = (isTimerRunning && info.elapsedDistance != null) ? info.elapsedDistance.toFloat() : 0.0;
-        var elapsedSeconds = (isTimerRunning && info.timerTime != null) ? (info.timerTime / 1000) : 0;
+        var totalDistanceM = 0.0;
+        var elapsedSeconds = 0;
+        if (timerState != Activity.TIMER_STATE_OFF) {
+            totalDistanceM = (info.elapsedDistance != null) ? info.elapsedDistance.toFloat() : 0.0;
+            elapsedSeconds = (info.timerTime != null) ? (info.timerTime / 1000) : 0;
+        }
 
         lastHeartRate = heartRate;
         lastSpeedMps = speedMps;
