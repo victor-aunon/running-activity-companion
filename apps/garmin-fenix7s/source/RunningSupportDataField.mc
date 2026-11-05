@@ -53,6 +53,85 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
     }
 
+    public function buildTelemetryPayload(info as Activity.Info) as Lang.Dictionary {
+        seqNumber++;
+
+        // 1. Position & GPS Quality from native activity or Position module
+        var gpsQuality = 0;
+        var elevationM = 0.0;
+
+        if (info has :currentLocation && info.currentLocation != null) {
+            var degs = info.currentLocation.toDegrees();
+            lastValidLat = degs[0];
+            lastValidLng = degs[1];
+            gpsQuality = (info has :currentLocationAccuracy && info.currentLocationAccuracy != null) ? info.currentLocationAccuracy : 4;
+            if (info has :altitude && info.altitude != null) {
+                elevationM = info.altitude.toFloat();
+            }
+        } else {
+            try {
+                var pos = Position.getInfo();
+                if (pos != null && pos.position != null) {
+                    var degs = pos.position.toDegrees();
+                    lastValidLat = degs[0];
+                    lastValidLng = degs[1];
+                    gpsQuality = (pos.accuracy != null) ? pos.accuracy : 4;
+                    if (pos.altitude != null) {
+                        elevationM = pos.altitude.toFloat();
+                    }
+                }
+            } catch (posEx) {
+                // Position fallback ignored
+            }
+        }
+
+        // 2. Running Biometrics & Timer State
+        var heartRate = (info.currentHeartRate != null) ? info.currentHeartRate : 0;
+        var speedMps = (info.currentSpeed != null) ? info.currentSpeed.toFloat() : 0.0;
+        var cadence = (info.currentCadence != null) ? info.currentCadence : 0;
+
+        var timerState = (info has :timerState && info.timerState != null) ? info.timerState : Activity.TIMER_STATE_OFF;
+        var isTimerRunning = (timerState == Activity.TIMER_STATE_ON);
+
+        var totalDistanceM = (isTimerRunning && info.elapsedDistance != null) ? info.elapsedDistance.toFloat() : 0.0;
+        var elapsedSeconds = (isTimerRunning && info.timerTime != null) ? (info.timerTime / 1000) : 0;
+
+        lastHeartRate = heartRate;
+        lastSpeedMps = speedMps;
+
+        var paceSecPerKm = 0.0;
+        if (speedMps > 0.1) {
+            paceSecPerKm = 1000.0 / speedMps;
+        }
+
+        var epochMs = Time.now().value().toLong() * 1000L;
+
+        // 3. Assemble Telemetry Dictionary adhering to schema
+        return {
+            "type" => "TELEMETRY_SNAPSHOT",
+            "seq" => seqNumber,
+            "timestamp" => epochMs,
+            "coordinates" => {
+                "lat" => lastValidLat,
+                "lng" => lastValidLng,
+                "elevationM" => elevationM,
+                "gpsQuality" => gpsQuality
+            },
+            "metrics" => {
+                "heartRateBpm" => heartRate,
+                "speedMps" => speedMps,
+                "paceSecPerKm" => paceSecPerKm,
+                "cadenceSpm" => cadence,
+                "totalDistanceM" => totalDistanceM,
+                "elapsedSeconds" => elapsedSeconds,
+                "isTimerRunning" => isTimerRunning
+            },
+            "deviceHealth" => {
+                "watchBatteryPct" => System.getSystemStats().battery.toNumber()
+            }
+        };
+    }
+
     // Called once per second by native Running activity
     function compute(info as Activity.Info) as Void {
         if (!isServiceEnabled) {
@@ -60,78 +139,7 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
 
         try {
-            seqNumber++;
-
-            // 1. Position & GPS Quality from native activity or Position module
-            var gpsQuality = 0;
-            var elevationM = 0.0;
-
-            if (info has :currentLocation && info.currentLocation != null) {
-                var degs = info.currentLocation.toDegrees();
-                lastValidLat = degs[0];
-                lastValidLng = degs[1];
-                gpsQuality = (info has :currentLocationAccuracy && info.currentLocationAccuracy != null) ? info.currentLocationAccuracy : 4;
-                if (info has :altitude && info.altitude != null) {
-                    elevationM = info.altitude.toFloat();
-                }
-            } else {
-                try {
-                    var pos = Position.getInfo();
-                    if (pos != null && pos.position != null) {
-                        var degs = pos.position.toDegrees();
-                        lastValidLat = degs[0];
-                        lastValidLng = degs[1];
-                        gpsQuality = (pos.accuracy != null) ? pos.accuracy : 4;
-                        if (pos.altitude != null) {
-                            elevationM = pos.altitude.toFloat();
-                        }
-                    }
-                } catch (posEx) {
-                    // Position fallback ignored
-                }
-            }
-
-            // 2. Running Biometrics
-            var heartRate = (info.currentHeartRate != null) ? info.currentHeartRate : 0;
-            var speedMps = (info.currentSpeed != null) ? info.currentSpeed.toFloat() : 0.0;
-            var cadence = (info.currentCadence != null) ? info.currentCadence : 0;
-            var totalDistanceM = (info.elapsedDistance != null) ? info.elapsedDistance.toFloat() : 0.0;
-            var elapsedSeconds = (info.timerTime != null) ? (info.timerTime / 1000) : 0;
-
-            lastHeartRate = heartRate;
-            lastSpeedMps = speedMps;
-
-            var paceSecPerKm = 0.0;
-            if (speedMps > 0.1) {
-                paceSecPerKm = 1000.0 / speedMps;
-            }
-
-            var epochMs = Time.now().value().toLong() * 1000L;
-
-            // 3. Assemble Telemetry Dictionary adhering to schema
-            var payload = {
-                "type" => "TELEMETRY_SNAPSHOT",
-                "seq" => seqNumber,
-                "timestamp" => epochMs,
-                "coordinates" => {
-                    "lat" => lastValidLat,
-                    "lng" => lastValidLng,
-                    "elevationM" => elevationM,
-                    "gpsQuality" => gpsQuality
-                },
-                "metrics" => {
-                    "heartRateBpm" => heartRate,
-                    "speedMps" => speedMps,
-                    "paceSecPerKm" => paceSecPerKm,
-                    "cadenceSpm" => cadence,
-                    "totalDistanceM" => totalDistanceM,
-                    "elapsedSeconds" => elapsedSeconds
-                },
-                "deviceHealth" => {
-                    "watchBatteryPct" => System.getSystemStats().battery.toNumber()
-                }
-            };
-
+            var payload = buildTelemetryPayload(info);
             transmitter.transmit(payload);
         } catch (ex) {
             System.println("[DATAFIELD] Error in compute(): " + ex.getErrorMessage());

@@ -39,6 +39,7 @@ export function SessionDashboardInner({
       maxHeartRateBpm={session.maxHeartRateBpm}
       athleteName={session.athlete}
       pathCoordinates={session.pathCoordinates}
+      kmMarkers={session.kmMarkers}
       spectator={session.spectator}
       nowPlaying={session.nowPlaying}
       gpsLocality={session.gpsLocality}

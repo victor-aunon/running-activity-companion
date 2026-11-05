@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
+import { updateOfficialKilometerMarkers, type KilometerMarker } from '../utils/mapMarkers.ts';
 
 interface RoomSession {
   token: string;
@@ -18,6 +19,7 @@ interface RoomSession {
   hasLoggedFirstTelemetry?: boolean;
   verbose?: boolean;
   pathHistory: [number, number][];
+  kmMarkers: KilometerMarker[];
   cheersHistory: Map<string, any>;
 }
 
@@ -317,10 +319,17 @@ function handleTelemetrySnapshot(room: RoomSession, msg: any) {
     }
   }
   const currentSeq = (room.lastTelemetry as any)?.seq;
+  const prevTelemetry = room.lastTelemetry as any;
   if (currentSeq == null || msg.seq == null || msg.seq >= currentSeq) {
     room.lastTelemetry = msg;
   }
   appendPathHistory(room, msg.coordinates);
+
+  if (!room.kmMarkers) {
+    room.kmMarkers = [];
+  }
+  room.kmMarkers = updateOfficialKilometerMarkers(room.kmMarkers, msg, prevTelemetry);
+
   logTelemetryStats(room, msg.seq, msg.metrics);
   broadcastToSpectators(room, JSON.stringify(msg));
 }
@@ -560,6 +569,7 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
         pendingGatewayCheers: [],
         verbose,
         pathHistory: [],
+        kmMarkers: [],
         cheersHistory: new Map(),
       };
       rooms.set(token, room);
@@ -623,6 +633,10 @@ export function createRelayServer(wss: WebSocketServer, options: RelayServerOpti
     getPathHistory: (token: string) => {
       const room = rooms.get(token.trim().toLowerCase());
       return room ? room.pathHistory : [];
+    },
+    getKmMarkers: (token: string) => {
+      const room = rooms.get(token.trim().toLowerCase());
+      return room ? room.kmMarkers || [] : [];
     },
     subscribeSseSpectator: (token: string, onPayload: (payload: string) => void) => {
       const room = getOrCreateRoom(token);

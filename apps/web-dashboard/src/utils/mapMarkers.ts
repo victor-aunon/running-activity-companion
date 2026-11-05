@@ -1,3 +1,5 @@
+import type { TelemetrySnapshotPacket } from '@running-support/shared-contracts';
+
 /**
  * Pure domain & geometry helpers for calculating and rendering route kilometer milestones
  */
@@ -14,6 +16,63 @@ export interface KilometerMarkerStyle {
   borderWidth?: string;
   backgroundColor?: string;
   textColor?: string;
+}
+
+/**
+ * Updates the official list of reached kilometer markers according to the watch's official odometry
+ * (metrics.totalDistanceM) and timer state (isTimerRunning !== false && elapsedSeconds > 0).
+ *
+ * Pre-start movements (where isTimerRunning === false or totalDistanceM === 0) never trigger kilometer markers.
+ */
+export function updateOfficialKilometerMarkers(
+  existingMarkers: KilometerMarker[],
+  currentTelemetry: TelemetrySnapshotPacket,
+  previousTelemetry?: TelemetrySnapshotPacket | null,
+): KilometerMarker[] {
+  if (!currentTelemetry || !currentTelemetry.metrics || !currentTelemetry.coordinates) {
+    return existingMarkers;
+  }
+
+  const { totalDistanceM, isTimerRunning, elapsedSeconds } = currentTelemetry.metrics;
+  // If timer is explicitly stopped or distance is 0 or elapsed seconds is 0, no kilometer milestone can be credited
+  if (isTimerRunning === false || !totalDistanceM || totalDistanceM < 1000 || elapsedSeconds === 0) {
+    return existingMarkers;
+  }
+
+  const markers = [...existingMarkers];
+  let nextKmTarget = (markers.length + 1) * 1000;
+
+  while (totalDistanceM >= nextKmTarget) {
+    const kmIndex = markers.length + 1;
+    let lat = currentTelemetry.coordinates.lat;
+    let lng = currentTelemetry.coordinates.lng;
+
+    // If we have previous telemetry that was below this target, interpolate exact cross point
+    if (
+      previousTelemetry &&
+      previousTelemetry.metrics &&
+      previousTelemetry.coordinates &&
+      previousTelemetry.metrics.totalDistanceM < nextKmTarget
+    ) {
+      const d1 = previousTelemetry.metrics.totalDistanceM;
+      const d2 = totalDistanceM;
+      if (d2 > d1) {
+        const ratio = Math.max(0, Math.min(1, (nextKmTarget - d1) / (d2 - d1)));
+        lat = previousTelemetry.coordinates.lat + ratio * (lat - previousTelemetry.coordinates.lat);
+        lng = previousTelemetry.coordinates.lng + ratio * (lng - previousTelemetry.coordinates.lng);
+      }
+    }
+
+    markers.push({
+      km: kmIndex,
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+    });
+
+    nextKmTarget = (markers.length + 1) * 1000;
+  }
+
+  return markers;
 }
 
 /**
@@ -136,14 +195,25 @@ export function createKilometerDivIcon(
 export function renderKilometerMarkers(
   L: any,
   kmMarkersLayer: any,
-  path: [number, number][],
+  pathOrMarkers: [number, number][] | KilometerMarker[],
   style?: KilometerMarkerStyle,
 ): KilometerMarker[] {
   if (!L || !kmMarkersLayer || typeof kmMarkersLayer.clearLayers !== 'function') {
     return [];
   }
 
-  const markers = calculateKilometerMarkers(path);
+  let markers: KilometerMarker[];
+  if (
+    Array.isArray(pathOrMarkers) &&
+    pathOrMarkers.length > 0 &&
+    typeof pathOrMarkers[0] === 'object' &&
+    !Array.isArray(pathOrMarkers[0]) &&
+    'km' in (pathOrMarkers[0] as any)
+  ) {
+    markers = pathOrMarkers as KilometerMarker[];
+  } else {
+    markers = calculateKilometerMarkers(pathOrMarkers as [number, number][]);
+  }
   const existingLayers: any[] | null =
     typeof kmMarkersLayer.getLayers === 'function' ? kmMarkersLayer.getLayers() : null;
 

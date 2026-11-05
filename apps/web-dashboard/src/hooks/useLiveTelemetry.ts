@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { WebSocketClient } from '../services/WebSocketClient';
 import type { ConnectionState } from '../services/WebSocketClient';
 import type {
@@ -7,6 +7,7 @@ import type {
   PathHistoryPacket,
   WebSocketDownlinkMessage,
 } from '@running-support/shared-contracts';
+import { updateOfficialKilometerMarkers, type KilometerMarker } from '../utils/mapMarkers';
 
 export interface UseLiveTelemetryOptions {
   token: string;
@@ -36,16 +37,21 @@ interface TelemetryState {
   setConnectionState: (c: ConnectionState) => void;
   setPathCoordinates: React.Dispatch<React.SetStateAction<[number, number][]>>;
   setElevationHistory: React.Dispatch<React.SetStateAction<number[]>>;
+  setKmMarkers: React.Dispatch<React.SetStateAction<KilometerMarker[]>>;
+  prevTelemetryRef: React.MutableRefObject<TelemetrySnapshotPacket | null>;
 }
 
 function handleDownlinkPacket(msg: WebSocketDownlinkMessage, state: TelemetryState) {
   if (msg.type === 'TELEMETRY_SNAPSHOT') {
     const snap = msg as TelemetrySnapshotPacket;
+    const prev = state.prevTelemetryRef.current;
     state.setTelemetry(snap);
     if (snap.coordinates?.lat && snap.coordinates?.lng) {
-      state.setPathCoordinates((prev) => [...prev, [snap.coordinates.lat, snap.coordinates.lng]]);
-      state.setElevationHistory((prev) => [...prev, snap.coordinates.elevationM]);
+      state.setPathCoordinates((p) => [...p, [snap.coordinates.lat, snap.coordinates.lng]]);
+      state.setElevationHistory((p) => [...p, snap.coordinates.elevationM]);
     }
+    state.setKmMarkers((p) => updateOfficialKilometerMarkers(p, snap, prev));
+    state.prevTelemetryRef.current = snap;
   } else if (msg.type === 'PATH_HISTORY') {
     const history = msg as PathHistoryPacket;
     if (Array.isArray(history.coordinates) && history.coordinates.length > 0) {
@@ -65,6 +71,8 @@ function useTelemetryState(
   const [sessionStatus, setSessionStatus] = useState<string>('ACTIVE');
   const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED');
   const [pathCoordinates, setPathCoordinates] = useState<[number, number][]>(initialPath);
+  const [kmMarkers, setKmMarkers] = useState<KilometerMarker[]>([]);
+  const prevTelemetryRef = useRef<TelemetrySnapshotPacket | null>(initialTelemetry);
   const [elevationHistory, setElevationHistory] = useState<number[]>(
     initialTelemetry?.coordinates ? [initialTelemetry.coordinates.elevationM] : [],
   );
@@ -77,8 +85,11 @@ function useTelemetryState(
     setConnectionState,
     pathCoordinates,
     setPathCoordinates,
+    kmMarkers,
+    setKmMarkers,
     elevationHistory,
     setElevationHistory,
+    prevTelemetryRef,
   };
 }
 
@@ -108,6 +119,9 @@ export function useLiveTelemetry({
           if (data?.coordinates && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
             state.setPathCoordinates(data.coordinates);
           }
+          if (data?.kmMarkers && Array.isArray(data.kmMarkers) && data.kmMarkers.length > 0) {
+            state.setKmMarkers(data.kmMarkers);
+          }
         })
         .catch(() => {});
     }
@@ -135,6 +149,7 @@ export function useLiveTelemetry({
     sessionStatus: state.sessionStatus,
     connectionState: state.connectionState,
     pathCoordinates: state.pathCoordinates,
+    kmMarkers: state.kmMarkers,
     elevationHistory: state.elevationHistory,
     client,
     isUnauthorized,

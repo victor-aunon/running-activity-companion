@@ -56,11 +56,12 @@ function handleSessionVerifyAndPath(
   if (pathname === '/api/session/path') {
     const token = ((parsedUrl.query.token as string) || '').toString();
     const coordinates = relay.getPathHistory ? relay.getPathHistory(token) : [];
+    const kmMarkers = relay.getKmMarkers ? relay.getKmMarkers(token) : [];
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
     });
-    res.end(JSON.stringify({ coordinates }));
+    res.end(JSON.stringify({ coordinates, kmMarkers }));
     return true;
   }
   return false;

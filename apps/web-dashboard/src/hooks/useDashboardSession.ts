@@ -197,6 +197,7 @@ export function useDashboardSession(
     maxHeartRateBpm,
     resolveZone,
     pathCoordinates: telemetry.pathCoordinates,
+    kmMarkers: telemetry.kmMarkers,
     spectator,
     nowPlaying,
     gpsLocality,

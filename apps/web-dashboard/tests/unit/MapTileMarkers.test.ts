@@ -176,6 +176,39 @@ void test('renderKilometerMarkers: MapTile Leaflet integration', async (t) => {
     assert.equal(layerMarkers.length, 1);
   });
 
+  await t.test('Renders official KilometerMarker array directly without recalculating Haversine', () => {
+    let cleared = false;
+    const addedMarkers: any[] = [];
+
+    const mockLayerGroup = {
+      clearLayers: () => {
+        cleared = true;
+      },
+    };
+
+    const mockL = {
+      divIcon: (opts: any) => opts,
+      marker: (coords: any, opts: any) => ({
+        addTo: (layer: any) => {
+          addedMarkers.push({ coords, opts, layer });
+        },
+      }),
+    };
+
+    const officialMarkers = [
+      { km: 1, lat: 40.42, lng: -3.71 },
+      { km: 2, lat: 40.43, lng: -3.72 },
+    ];
+
+    const result = renderKilometerMarkers(mockL, mockLayerGroup, officialMarkers);
+    assert.equal(cleared, true);
+    assert.equal(addedMarkers.length, 2);
+    assert.equal(result.length, 2);
+    assert.equal(addedMarkers[0].coords[0], 40.42);
+    assert.equal(addedMarkers[0].coords[1], -3.71);
+    assert.equal(addedMarkers[1].coords[0], 40.43);
+    assert.equal(addedMarkers[1].coords[1], -3.72);
+  });
 
   await t.test('Safely handles null or undefined L / layerGroup without throwing', () => {
     assert.doesNotThrow(() => {

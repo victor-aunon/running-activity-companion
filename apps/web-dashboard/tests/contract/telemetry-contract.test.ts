@@ -34,6 +34,44 @@ void test('Telemetry Contract Test: 1 Hz telemetry packet serialization & valida
     assert.equal(isTelemetrySnapshotPacket(validPacket), true);
   });
 
+  await t.test('Validates telemetry snapshot with isTimerRunning flag', () => {
+    const preStartPacket = {
+      type: 'TELEMETRY_SNAPSHOT',
+      sessionId: '550e8400-e29b-41d4-a716-446655440000',
+      seq: 1,
+      timestamp: Date.now(),
+      coordinates: {
+        lat: 40.4168,
+        lng: -3.7038,
+        elevationM: 650.5,
+        gpsQuality: 4,
+      },
+      metrics: {
+        heartRateBpm: 85,
+        speedMps: 1.2,
+        paceSecPerKm: 0.0,
+        cadenceSpm: 0,
+        totalDistanceM: 0.0,
+        elapsedSeconds: 0,
+        isTimerRunning: false,
+      },
+    };
+
+    assert.equal(isTelemetrySnapshotPacket(preStartPacket), true);
+
+    const activePacket = {
+      ...preStartPacket,
+      metrics: {
+        ...preStartPacket.metrics,
+        totalDistanceM: 1050.0,
+        elapsedSeconds: 270,
+        isTimerRunning: true,
+      },
+    };
+
+    assert.equal(isTelemetrySnapshotPacket(activePacket), true);
+  });
+
   await t.test('Rejects invalid or incomplete telemetry packet', () => {
     const invalidPacket = {
       type: 'TELEMETRY_SNAPSHOT',

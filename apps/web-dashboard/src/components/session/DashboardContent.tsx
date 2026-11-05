@@ -8,11 +8,13 @@ import type { useSpectatorCheer } from '../../hooks/useSpectatorCheer';
 import type { useNowPlaying } from '../../hooks/useNowPlaying';
 import type { HeartRateZoneResult } from '../../types/telemetry';
 import type { CheerPreset } from '@running-support/shared-contracts';
+import type { KilometerMarker } from '../../utils/mapMarkers';
 
 export interface MainDashboardProps {
   vm: ReturnType<typeof extractViewMetrics>;
   resolveZone: (b: number) => HeartRateZoneResult;
   pathCoordinates: [number, number][];
+  kmMarkers?: KilometerMarker[];
   spectator: ReturnType<typeof useSpectatorCheer>;
   nowPlaying: ReturnType<typeof useNowPlaying>;
   targetDistanceKm?: number;
@@ -29,6 +31,7 @@ export interface MainDashboardProps {
 export interface MapAndCheerProps {
   vm: ReturnType<typeof extractViewMetrics>;
   pathCoordinates: [number, number][];
+  kmMarkers?: KilometerMarker[];
   spectator: ReturnType<typeof useSpectatorCheer>;
   nowPlaying: ReturnType<typeof useNowPlaying>;
   routeName?: string;
@@ -42,12 +45,14 @@ export interface MapAndCheerProps {
 export function MapColumn({
   vm,
   pathCoordinates,
+  kmMarkers,
   routeName,
   elevationText,
   eta,
 }: {
   vm: ReturnType<typeof extractViewMetrics>;
   pathCoordinates: [number, number][];
+  kmMarkers?: KilometerMarker[];
   routeName?: string;
   elevationText?: string;
   eta?: string;
@@ -59,6 +64,7 @@ export function MapColumn({
         currentLng={vm.lng}
         gpsQuality={vm.gpsQuality}
         pathCoordinates={pathCoordinates}
+        kmMarkers={kmMarkers}
         elapsedSeconds={vm.elapsedSeconds}
         elevationM={vm.elevationM}
         eta={eta}
@@ -103,6 +109,7 @@ export function MainDashboardContent({
   vm,
   resolveZone,
   pathCoordinates,
+  kmMarkers,
   spectator,
   nowPlaying,
   targetDistanceKm,
@@ -129,6 +136,7 @@ export function MainDashboardContent({
       <MapAndCheerColumns
         vm={vm}
         pathCoordinates={pathCoordinates}
+        kmMarkers={kmMarkers}
         spectator={spectator}
         nowPlaying={nowPlaying}
         routeName={routeName}

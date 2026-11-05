@@ -97,6 +97,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "isTimerRunning": {
+          "type": "boolean",
+          "description": "True if activity timer on watch is actively running"
+        },
         "targetPaceSecPerKm": {
           "type": "number",
           "minimum": 0.0,

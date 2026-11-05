@@ -3,13 +3,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Map, Layers, Target, TrendingUp, Plus, Minus, Compass } from 'lucide-react';
 import { formatElapsedTime } from './HeaderTile';
-import { renderKilometerMarkers } from '../../utils/mapMarkers';
+import { renderKilometerMarkers, type KilometerMarker } from '../../utils/mapMarkers';
 
 export interface MapTileProps {
   currentLat?: number;
   currentLng?: number;
   gpsQuality?: number;
   pathCoordinates?: [number, number][];
+  kmMarkers?: KilometerMarker[];
   elapsedSeconds?: number;
   elevationM?: number;
   eta?: string;
@@ -22,7 +23,8 @@ interface LeafletInitParams {
   lat: number;
   lng: number;
   path: [number, number][];
-  onUserInteraction: () => void;
+  kmMarkers?: KilometerMarker[];
+  onUserInteraction?: () => void;
 }
 
 function initLeafletMap(L: any, params: LeafletInitParams) {
@@ -61,7 +63,8 @@ function initLeafletMap(L: any, params: LeafletInitParams) {
   }).addTo(map);
 
   const kmMarkersLayer = L.layerGroup().addTo(map);
-  renderKilometerMarkers(L, kmMarkersLayer, params.path);
+  const markersToRender = params.kmMarkers !== undefined ? params.kmMarkers : params.path;
+  renderKilometerMarkers(L, kmMarkersLayer, markersToRender);
 
   return { map, marker, polyline, streetLayer, satelliteLayer, kmMarkersLayer, L };
 }
@@ -71,6 +74,7 @@ interface LeafletHookParams {
   lat: number;
   lng: number;
   path: [number, number][];
+  kmMarkers?: KilometerMarker[];
   isDegraded: boolean;
   isFollowing: boolean;
   onUserInteraction: () => void;
@@ -95,7 +99,8 @@ function updateLeafletEntities(
   if (!params.isDegraded) {
     inst.polyline?.setLatLngs(params.path);
     if (inst.L && inst.kmMarkersLayer) {
-      renderKilometerMarkers(inst.L, inst.kmMarkersLayer, params.path);
+      const markersToRender = params.kmMarkers !== undefined ? params.kmMarkers : params.path;
+      renderKilometerMarkers(inst.L, inst.kmMarkersLayer, markersToRender);
     }
   }
   if (params.isFollowing) {
@@ -146,6 +151,7 @@ function useLeafletInstance(params: LeafletHookParams) {
         lat: params.lat,
         lng: params.lng,
         path: params.path,
+        kmMarkers: params.kmMarkers,
         onUserInteraction: params.onUserInteraction,
       });
     });
@@ -392,6 +398,7 @@ function useMapTileState(
     lat: props.currentLat ?? 40.4168,
     lng: props.currentLng ?? -3.7038,
     path: props.pathCoordinates ?? [],
+    kmMarkers: props.kmMarkers,
     isDegraded: (props.gpsQuality ?? 0) === 0,
     isFollowing,
     onUserInteraction: () => setIsFollowing(false),

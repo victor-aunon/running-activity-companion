@@ -4,7 +4,11 @@ import {
   haversineDistanceMeters,
   calculateKilometerMarkers,
   buildKilometerMarkerHtml,
+  updateOfficialKilometerMarkers,
+  renderKilometerMarkers,
+  type KilometerMarker,
 } from '../../src/utils/mapMarkers.ts';
+import type { TelemetrySnapshotPacket } from '@running-support/shared-contracts';
 
 void test('haversineDistanceMeters: Geodesic distance calculation', async (t) => {
   await t.test('Returns 0 for identical coordinates', () => {
@@ -164,3 +168,73 @@ void test('buildKilometerMarkerHtml: Visual presentation contract', async (t) =>
     assert.ok(html.includes('24px'));
   });
 });
+
+void test('updateOfficialKilometerMarkers: Official watch odometry kilometer markers', async (t) => {
+  const createSnap = (
+    totalDistanceM: number,
+    isTimerRunning: boolean,
+    lat: number,
+    lng: number,
+  ): TelemetrySnapshotPacket => ({
+    type: 'TELEMETRY_SNAPSHOT',
+    sessionId: 'test-session',
+    seq: 1,
+    timestamp: Date.now(),
+    coordinates: { lat, lng, elevationM: 650, gpsQuality: 4 },
+    metrics: {
+      heartRateBpm: 150,
+      speedMps: 3.5,
+      paceSecPerKm: 285,
+      cadenceSpm: 175,
+      totalDistanceM,
+      elapsedSeconds: isTimerRunning ? 100 : 0,
+      isTimerRunning,
+    },
+  });
+
+  await t.test('Does NOT add any markers when isTimerRunning is false or totalDistanceM is 0 (pre-start)', () => {
+    // Runner is moving 1500m before pressing start
+    const snapPreStart = createSnap(0.0, false, 40.42, -3.71);
+    const markers = updateOfficialKilometerMarkers([], snapPreStart);
+    assert.deepEqual(markers, []);
+  });
+
+  await t.test('Does NOT add marker when active distance is under 1000m', () => {
+    const snap500m = createSnap(500.0, true, 40.425, -3.715);
+    const markers = updateOfficialKilometerMarkers([], snap500m);
+    assert.deepEqual(markers, []);
+  });
+
+  await t.test('Adds km 1 marker when totalDistanceM reaches or crosses 1000m', () => {
+    const prevSnap = createSnap(980.0, true, 40.429, -3.719);
+    const currSnap = createSnap(1020.0, true, 40.431, -3.721);
+
+    const markers = updateOfficialKilometerMarkers([], currSnap, prevSnap);
+    assert.equal(markers.length, 1);
+    assert.equal(markers[0].km, 1);
+    // Interpolated lat should be exactly halfway between 40.429 and 40.431 -> 40.430
+    assert.ok(Math.abs(markers[0].lat - 40.43) < 0.0001);
+    assert.ok(Math.abs(markers[0].lng - -3.72) < 0.0001);
+  });
+
+  await t.test('Does not duplicate existing markers on subsequent snapshots', () => {
+    const existing: KilometerMarker[] = [{ km: 1, lat: 40.43, lng: -3.72 }];
+    const currSnap = createSnap(1200.0, true, 40.435, -3.725);
+
+    const markers = updateOfficialKilometerMarkers(existing, currSnap);
+    assert.equal(markers.length, 1);
+    assert.equal(markers[0].km, 1);
+  });
+
+  await t.test('Adds km 2 marker when totalDistanceM reaches 2000m', () => {
+    const existing: KilometerMarker[] = [{ km: 1, lat: 40.43, lng: -3.72 }];
+    const currSnap = createSnap(2050.0, true, 40.445, -3.735);
+
+    const markers = updateOfficialKilometerMarkers(existing, currSnap);
+    assert.equal(markers.length, 2);
+    assert.equal(markers[1].km, 2);
+    assert.equal(markers[1].lat, 40.445);
+    assert.equal(markers[1].lng, -3.735);
+  });
+});
+

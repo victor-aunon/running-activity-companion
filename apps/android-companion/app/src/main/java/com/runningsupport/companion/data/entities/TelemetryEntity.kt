@@ -36,6 +36,8 @@ data class TelemetryEntity(
     val cadence: Int,
     val stepCount: Int = 0,
     val distanceM: Double = 0.0,
+    val elapsedSeconds: Long = 0L,
+    val isTimerRunning: Boolean = false,
     val synced: Int = 0 // 0 = unsynced, 1 = synced
 ) {
     fun toJsonObject(): JSONObject {
@@ -56,8 +58,9 @@ data class TelemetryEntity(
                 put("paceSecPerKm", paceSecPerKm)
                 put("cadenceSpm", cadence)
                 put("stepCount", stepCount)
-                put("totalDistanceM", if (distanceM > 0.0) distanceM else seq * 3.7)
-                put("elapsedSeconds", seq)
+                put("totalDistanceM", distanceM)
+                put("elapsedSeconds", elapsedSeconds)
+                put("isTimerRunning", isTimerRunning)
             })
             put("deviceHealth", JSONObject().apply {
                 put("watchBatteryPct", 85)

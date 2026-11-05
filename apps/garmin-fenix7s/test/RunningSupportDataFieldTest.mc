@@ -54,4 +54,27 @@ class RunningSupportDataFieldTest {
         Test.assertEqualMessage(overlay.getActiveNotificationId(), "notif-test-1", "Active notification ID must match");
         return true;
     }
+
+    (:test)
+    function testPreStartTelemetrySuppressesDistanceAndMarksTimerOff(logger as Test.Logger) as Lang.Boolean {
+        logger.debug("Testing telemetry payload when timerState is OFF/STOPPED before START...");
+        var field = new RunningSupportDataField();
+        var info = new Activity.Info();
+        info.timerState = Activity.TIMER_STATE_OFF;
+        info.elapsedDistance = 1500.0f;
+        info.timerTime = 0;
+
+        var payload = field.buildTelemetryPayload(info);
+        var metrics = payload.get("metrics") as Lang.Dictionary;
+        Test.assertEqualMessage(metrics.get("isTimerRunning"), false, "isTimerRunning must be false when timer is OFF");
+        Test.assertEqualMessage(metrics.get("totalDistanceM"), 0.0f, "totalDistanceM must be 0.0 before START");
+        Test.assertEqualMessage(metrics.get("elapsedSeconds"), 0, "elapsedSeconds must be 0 before START");
+
+        info.timerState = Activity.TIMER_STATE_ON;
+        var activePayload = field.buildTelemetryPayload(info);
+        var activeMetrics = activePayload.get("metrics") as Lang.Dictionary;
+        Test.assertEqualMessage(activeMetrics.get("isTimerRunning"), true, "isTimerRunning must be true when timer is ON");
+        Test.assertEqualMessage(activeMetrics.get("totalDistanceM"), 1500.0f, "totalDistanceM must be preserved when timer is ON");
+        return true;
+    }
 }

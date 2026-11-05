@@ -35,6 +35,31 @@ class TelemetryBufferDaoExportTest {
     }
 
     @Test
+    fun testTelemetryEntity_DoesNotFabricateDistanceWhenDistanceMIsZero() {
+        val preStartTelemetry = TelemetryEntity(
+            sessionId = "carrera-1",
+            seq = 300,
+            timestamp = 1700000300000L,
+            latitude = 40.4168,
+            longitude = -3.7038,
+            elevation = 650.0,
+            speedMps = 1.5,
+            paceSecPerKm = 0.0,
+            heartRate = 90,
+            cadence = 0,
+            distanceM = 0.0,
+            elapsedSeconds = 0L,
+            isTimerRunning = false
+        )
+
+        val json = preStartTelemetry.toJsonObject()
+        val metrics = json.getJSONObject("metrics")
+        assertEquals(0.0, metrics.getDouble("totalDistanceM"), 0.001)
+        assertEquals(0L, metrics.getLong("elapsedSeconds"))
+        assertEquals(false, metrics.getBoolean("isTimerRunning"))
+    }
+
+    @Test
     fun testSessionEntity_CarriesMetricsForSummary() {
         val session = SessionEntity(
             sessionId = "carrera-1",

@@ -37,8 +37,16 @@ export interface RunningMetrics {
   stepCount?: number;
   totalDistanceM: number;
   elapsedSeconds: number;
+  isTimerRunning?: boolean;
   targetPaceSecPerKm?: number;
   totalRaceDistanceM?: number;
+}
+
+export interface KilometerMarker {
+  km: number;
+  lat: number;
+  lng: number;
+  timestamp?: number;
 }
 
 export type NotificationType =

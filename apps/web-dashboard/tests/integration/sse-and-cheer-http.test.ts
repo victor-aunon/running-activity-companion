@@ -25,6 +25,15 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
       return;
     }
 
+    if (url.pathname === '/api/session/path') {
+      const token = (url.searchParams.get('token') || '').trim().toLowerCase();
+      const coordinates = relay.getPathHistory ? relay.getPathHistory(token) : [];
+      const kmMarkers = (relay as any).getKmMarkers ? (relay as any).getKmMarkers(token) : [];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ coordinates, kmMarkers }));
+      return;
+    }
+
     if (url.pathname === '/api/session/cheer' && req.method === 'POST') {
       let body = '';
       req.on('data', (c) => (body += c));
@@ -338,6 +347,74 @@ void test('SSE & Cheer HTTP Integration: Continuous downlink and HTTP cheer disp
         assert.ok(sseChunks.some((c) => c.includes('COMPLETED')));
       } finally {
         sseReq.destroy();
+      }
+    },
+  );
+
+  await t.test(
+    '/api/session/path returns coordinates and official kmMarkers synchronizing with watch odometry',
+    async () => {
+      const sessionToken = 'path-test-sess';
+      const gw = new WebSocket(
+        `ws://localhost:${port}/api/ws/session?token=${sessionToken}&role=gateway`,
+      );
+      await new Promise((r) => gw.on('open', r));
+
+      try {
+        // Pre-start movement: runner walking before pressing start
+        gw.send(
+          JSON.stringify({
+            type: 'TELEMETRY_SNAPSHOT',
+            sessionId: sessionToken,
+            seq: 1,
+            timestamp: Date.now(),
+            coordinates: { lat: 40.4168, lng: -3.7038 },
+            metrics: {
+              heartRateBpm: 80,
+              speedMps: 1.2,
+              totalDistanceM: 0.0,
+              elapsedSeconds: 0,
+              isTimerRunning: false,
+            },
+          }),
+        );
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const res1 = await fetch(`http://localhost:${port}/api/session/path?token=${sessionToken}`);
+        assert.equal(res1.status, 200);
+        const data1 = await res1.json();
+        assert.equal(data1.coordinates.length, 1);
+        assert.deepEqual(data1.kmMarkers, []); // No km marker before START
+
+        // Runner presses start and completes 1050m
+        gw.send(
+          JSON.stringify({
+            type: 'TELEMETRY_SNAPSHOT',
+            sessionId: sessionToken,
+            seq: 2,
+            timestamp: Date.now() + 1000,
+            coordinates: { lat: 40.425, lng: -3.712 },
+            metrics: {
+              heartRateBpm: 155,
+              speedMps: 3.5,
+              totalDistanceM: 1050.0,
+              elapsedSeconds: 280,
+              isTimerRunning: true,
+            },
+          }),
+        );
+
+        await new Promise((r) => setTimeout(r, 50));
+
+        const res2 = await fetch(`http://localhost:${port}/api/session/path?token=${sessionToken}`);
+        assert.equal(res2.status, 200);
+        const data2 = await res2.json();
+        assert.equal(data2.coordinates.length, 2);
+        assert.equal(data2.kmMarkers.length, 1);
+        assert.equal(data2.kmMarkers[0].km, 1);
+      } finally {
+        gw.close();
       }
     },
   );

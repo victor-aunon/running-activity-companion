@@ -14,6 +14,7 @@ import type { useSpectatorNotifications } from '../../hooks/useSpectatorNotifica
 import type { HeartRateZoneResult } from '../../types/telemetry';
 import type { CheerPreset } from '@running-support/shared-contracts';
 import type { DashboardRuntimeConfig } from '../../utils/runtimeConfig';
+import type { KilometerMarker } from '../../utils/mapMarkers';
 
 export interface DashboardLayoutProps {
   vm: ReturnType<typeof extractViewMetrics>;
@@ -21,6 +22,7 @@ export interface DashboardLayoutProps {
   maxHeartRateBpm?: number;
   athleteName?: string;
   pathCoordinates: [number, number][];
+  kmMarkers?: KilometerMarker[];
   spectator: ReturnType<typeof useSpectatorCheer>;
   nowPlaying: ReturnType<typeof useNowPlaying>;
   gpsLocality?: string;
@@ -66,6 +68,7 @@ function resolveMainDashboardProps(props: DashboardLayoutProps): MainDashboardPr
     vm: props.vm,
     resolveZone: props.resolveZone,
     pathCoordinates: props.pathCoordinates,
+    kmMarkers: props.kmMarkers,
     spectator: props.spectator,
     nowPlaying: props.nowPlaying,
     targetDistanceKm: resolveTargetDistanceKm(
