@@ -34,7 +34,7 @@ function initLeafletMap(L: any, params: LeafletInitParams) {
   );
 
   map.on('dragstart', () => {
-    params.onUserInteraction();
+    params.onUserInteraction?.();
   });
 
   const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
