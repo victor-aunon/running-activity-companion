@@ -17,12 +17,17 @@ class RunningSupportDataField extends WatchUi.DataField {
     private var lastHeartRate as Lang.Number = 0;
     private var lastSpeedMps as Lang.Float = 0.0;
     private var isServiceEnabled as Lang.Boolean = true;
+    private var computeTicks as Lang.Number = 0;
+    public const TRANSMIT_INTERVAL_SECONDS = 3;
+    hidden var phoneConnectedOverride as Lang.Boolean? = null;
 
     function initialize() {
         DataField.initialize();
         transmitter = new BleTransmitter();
         overlay = new NotificationBannerOverlay();
         transmitter.setCheerCallback(method(:onCheerReceived));
+        computeTicks = 0;
+        phoneConnectedOverride = null;
         checkServiceEnabled();
     }
 
@@ -51,6 +56,25 @@ class RunningSupportDataField extends WatchUi.DataField {
         } catch (ex) {
             isServiceEnabled = true;
         }
+    }
+
+    public function setPhoneConnectedOverride(overrideVal as Lang.Boolean?) as Void {
+        phoneConnectedOverride = overrideVal;
+    }
+
+    public function isPhoneConnected() as Lang.Boolean {
+        if (phoneConnectedOverride != null) {
+            return phoneConnectedOverride as Lang.Boolean;
+        }
+        var settings = System.getDeviceSettings();
+        if (settings has :phoneConnected) {
+            return settings.phoneConnected;
+        }
+        return true;
+    }
+
+    public function getComputeTicks() as Lang.Number {
+        return computeTicks;
     }
 
     public function buildTelemetryPayload(info as Activity.Info) as Lang.Dictionary {
@@ -143,6 +167,26 @@ class RunningSupportDataField extends WatchUi.DataField {
         }
 
         try {
+            // Actualizar métricas para renderizado en pantalla (1 Hz)
+            if (info.currentHeartRate != null) {
+                lastHeartRate = info.currentHeartRate;
+            }
+            if (info.currentSpeed != null) {
+                lastSpeedMps = info.currentSpeed.toFloat();
+            }
+
+            computeTicks++;
+
+            // 1. Throttling: emitir telemetría sólo cada 3 segundos
+            if (computeTicks % TRANSMIT_INTERVAL_SECONDS != 0) {
+                return;
+            }
+
+            // 2. Circuit breaker: silencio absoluto si el móvil no está enlazado
+            if (!isPhoneConnected()) {
+                return;
+            }
+
             var payload = buildTelemetryPayload(info);
             transmitter.transmit(payload);
         } catch (ex) {

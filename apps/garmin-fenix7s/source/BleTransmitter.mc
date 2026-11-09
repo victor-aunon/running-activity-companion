@@ -6,16 +6,24 @@ class BleTransmitter {
     private var isConnected as Lang.Boolean = true;
     private var isTransmitting as Lang.Boolean = false;
     private var transmitStartTimeMs as Lang.Number = 0;
+    private var cooldownUntilMs as Lang.Number = 0;
+    private const COOLDOWN_PERIOD_MS = 9000; // 9s backoff tras fallo para no saturar GATT
     private var ringBuffer as Lang.Array<Lang.Dictionary> = [];
     private const MAX_BUFFER_SIZE = 10;
     private var cheerCallback as Method?;
     private var lastSeq as Lang.Number = 0;
+    private var lastTransmittedSeq as Lang.Number = 0;
+    hidden var phoneConnectedOverride as Lang.Boolean? = null;
 
     function initialize() {
         ringBuffer = [];
         isConnected = true;
         isTransmitting = false;
         transmitStartTimeMs = 0;
+        cooldownUntilMs = 0;
+        lastSeq = 0;
+        lastTransmittedSeq = 0;
+        phoneConnectedOverride = null;
         setupListener();
     }
 
@@ -28,6 +36,33 @@ class BleTransmitter {
         }
     }
 
+    public function setPhoneConnectedOverride(overrideVal as Lang.Boolean?) as Void {
+        phoneConnectedOverride = overrideVal;
+    }
+
+    public function isPhoneConnected() as Lang.Boolean {
+        if (phoneConnectedOverride != null) {
+            return phoneConnectedOverride as Lang.Boolean;
+        }
+        var settings = System.getDeviceSettings();
+        if (settings has :phoneConnected) {
+            return settings.phoneConnected;
+        }
+        return true;
+    }
+
+    public function isCoolingDown() as Lang.Boolean {
+        if (cooldownUntilMs == 0) {
+            return false;
+        }
+        var now = System.getTimer();
+        if (cooldownUntilMs - now > 0) {
+            return true;
+        }
+        cooldownUntilMs = 0;
+        return false;
+    }
+
     public function setCheerCallback(callback as Method?) as Void {
         cheerCallback = callback;
     }
@@ -35,6 +70,19 @@ class BleTransmitter {
     public function transmit(payload as Lang.Dictionary) as Void {
         if (payload.hasKey("seq")) {
             lastSeq = payload["seq"] as Lang.Number;
+        }
+
+        // 1. Circuit breaker: si no hay teléfono vinculado, silencio absoluto de radio
+        if (!isPhoneConnected()) {
+            isConnected = false;
+            bufferPayload(payload);
+            return;
+        }
+
+        // 2. Backoff: si estamos en ventana de enfriamiento tras un fallo, encolar sin saturar BLE
+        if (isCoolingDown()) {
+            bufferPayload(payload);
+            return;
         }
 
         var now = System.getTimer();
@@ -47,6 +95,9 @@ class BleTransmitter {
         if (!isTransmitting) {
             isTransmitting = true;
             transmitStartTimeMs = now;
+            if (payload.hasKey("seq")) {
+                lastTransmittedSeq = payload["seq"] as Lang.Number;
+            }
             var listener = new CommListener(self, payload);
             try {
                 Communications.transmit(payload, null, listener);
@@ -67,20 +118,52 @@ class BleTransmitter {
         ringBuffer.add(payload);
     }
 
+    public function purgeStaleTelemetrySnapshots() as Void {
+        if (ringBuffer.size() <= 1) {
+            return;
+        }
+
+        var latestSnapshot = null;
+        var nonTelemetry = [] as Lang.Array<Lang.Dictionary>;
+
+        for (var i = 0; i < ringBuffer.size(); i++) {
+            var item = ringBuffer[i];
+            var type = item.get("type");
+            if (type != null && type.equals("TELEMETRY_SNAPSHOT")) {
+                latestSnapshot = item;
+            } else {
+                nonTelemetry.add(item);
+            }
+        }
+
+        var newBuffer = [] as Lang.Array<Lang.Dictionary>;
+        for (var j = 0; j < nonTelemetry.size(); j++) {
+            newBuffer.add(nonTelemetry[j]);
+        }
+        if (latestSnapshot != null) {
+            newBuffer.add(latestSnapshot);
+        }
+
+        ringBuffer = newBuffer;
+    }
+
     public function onTransmitSuccess() as Void {
         isTransmitting = false;
         isConnected = true;
+        cooldownUntilMs = 0;
         flushBuffer();
     }
 
     public function onTransmitFailed(failedPayload as Lang.Dictionary) as Void {
         isTransmitting = false;
         isConnected = false;
+        cooldownUntilMs = System.getTimer() + COOLDOWN_PERIOD_MS;
         bufferPayload(failedPayload);
     }
 
-    hidden function flushBuffer() as Void {
-        if (!isTransmitting && ringBuffer.size() > 0) {
+    public function flushBuffer() as Void {
+        purgeStaleTelemetrySnapshots();
+        if (!isTransmitting && !isCoolingDown() && isPhoneConnected() && ringBuffer.size() > 0) {
             var nextPayload = ringBuffer[0];
             ringBuffer = ringBuffer.slice(1, ringBuffer.size());
             transmit(nextPayload);
@@ -108,6 +191,12 @@ class BleTransmitter {
     }
 
     public function getStatusString() as Lang.String {
+        if (!isPhoneConnected()) {
+            return "SIN MOVIL (" + ringBuffer.size() + ")";
+        }
+        if (isCoolingDown()) {
+            return "PAUSA (" + ringBuffer.size() + ")";
+        }
         if (!isConnected) {
             return "REINTENTO (" + ringBuffer.size() + ")";
         }
@@ -127,6 +216,18 @@ class BleTransmitter {
 
     public function getBufferItem(index as Lang.Number) as Lang.Dictionary {
         return ringBuffer[index];
+    }
+
+    public function getLastTransmittedSeq() as Lang.Number {
+        return lastTransmittedSeq;
+    }
+
+    public function setCooldownUntilMs(targetMs as Lang.Number) as Void {
+        cooldownUntilMs = targetMs;
+    }
+
+    public function getCooldownUntilMs() as Lang.Number {
+        return cooldownUntilMs;
     }
 }
 
